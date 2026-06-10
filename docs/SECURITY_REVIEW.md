@@ -1,7 +1,32 @@
 # Security Review — 3M
 
-Status: **findings logged, fixes deferred to the final security pass before ship.**
-Last reviewed: 2026-06-10. Re-run a full pass after the feature sprint.
+Status: **security pass applied 2026-06-10 — all findings resolved or accepted.**
+First reviewed 2026-06-10; fixes applied same day after the feature sprint.
+
+## Resolved this pass
+- **#1 XFF spoofing** → IP now from `@vercel/functions` `ipAddress(req)` (signed
+  platform header), never client `X-Forwarded-For`. `lib/ratelimit.ts:clientIp`.
+- **#2 Global LLM cap** → second sliding-window limiter (`60/60s`, key `"all"`)
+  checked alongside per-IP; both must pass. `lib/ratelimit.ts`.
+- **#3 Input length** → `/api/score` rejects input > 100 chars (400). Verified.
+- **#4 Fail-closed** → production with Upstash unset blocks new scorings (429);
+  cached lookups still served. Verified live.
+- **#5 Prompt-injection / DB pollution** → `lib/resolve.ts` sanity-gates model
+  output (name length, scores 0–10) before insert.
+- **#6 `server-only` guard** → `lib/supabase.ts` imports `server-only`; a
+  client-side import now fails the build.
+- **#7 Error disclosure** → `/api/library` returns generic messages; Postgres
+  detail stays server-side.
+
+RLS re-verified live (no schema change since): publishable key reads public
+`games`, blocked from writes (`42501`), can't read others' `user_games` /
+`score_feedback`. The feedback feature (added after the first review) was built
+to the same auth + RLS + PK-dedupe pattern and verified with a real user JWT.
+
+Original findings below, retained for the record.
+
+---
+
 
 RLS verified enforced against the live DB at review time: the publishable
 (`anon`) key can read public `games`, is blocked from writing (`42501`

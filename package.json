@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test:scoring": "node --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",
@@ -14,9 +14,11 @@
     "@supabase/supabase-js": "^2.49.0",
     "@upstash/ratelimit": "^2.0.5",
     "@upstash/redis": "^1.34.5",
+    "@vercel/functions": "^3.7.0",
     "next": "^15.3.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

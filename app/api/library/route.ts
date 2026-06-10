@@ -13,7 +13,7 @@ export async function GET() {
     .select("added_at, game:games(*)")
     .order("added_at", { ascending: false });
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "request failed" }, { status: 500 });
 
   return NextResponse.json({ games: (data ?? []).map((r) => r.game) });
 }
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     .from("user_games")
     .upsert({ user_id: user.id, game_id });
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "request failed" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
@@ -50,7 +50,7 @@ export async function DELETE(req: NextRequest) {
     .delete()
     .eq("game_id", game_id);
   if (error)
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "request failed" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { slugify } from "@/lib/slug";
-import { checkRateLimit } from "@/lib/ratelimit";
+import { checkRateLimit, clientIp } from "@/lib/ratelimit";
 import { lookupCachedGame, scoreAndCache } from "@/lib/resolve";
+
+const MAX_INPUT = 100; // real game names are short; caps token cost per call
 
 export async function POST(req: NextRequest) {
   const { input } = await req.json();
   if (!input || typeof input !== "string")
     return NextResponse.json({ error: "no input" }, { status: 400 });
+  if (input.length > MAX_INPUT)
+    return NextResponse.json({ error: "input too long" }, { status: 400 });
 
   const rawSlug = slugify(input);
   if (!rawSlug)
@@ -17,10 +21,8 @@ export async function POST(req: NextRequest) {
   if (cached)
     return NextResponse.json({ recognized: true, game: cached, cached: true });
 
-  // 2. rate limit before any LLM-billed work, keyed on IP
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!(await checkRateLimit(ip)))
+  // 2. rate limit before any LLM-billed work, keyed on the trusted platform IP
+  if (!(await checkRateLimit(clientIp(req))))
     return NextResponse.json(
       { error: "rate limited, slow down" },
       { status: 429 }

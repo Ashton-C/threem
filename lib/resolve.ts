@@ -50,6 +50,19 @@ export async function scoreAndCache(
   const parsed = await scoreGame(input);
   if (!parsed.recognized) return { recognized: false, game: null };
 
+  // sanity-gate model output before it's persisted to the shared cache
+  const valid = (n: unknown) => typeof n === "number" && n >= 0 && n <= 10;
+  if (
+    typeof parsed.game !== "string" ||
+    parsed.game.length === 0 ||
+    parsed.game.length > 120 ||
+    !valid(parsed.micro?.score) ||
+    !valid(parsed.meso?.score) ||
+    !valid(parsed.macro?.score)
+  ) {
+    return { recognized: false, game: null };
+  }
+
   // canonical slug — may already exist under a different spelling
   const canonSlug = slugify(parsed.game);
   let { data: game } = await db
