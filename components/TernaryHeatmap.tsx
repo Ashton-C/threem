@@ -5,7 +5,7 @@
 // subdivided into N rows of cells and intensity = games per cell.
 // Pure SVG, no chart library.
 
-type Point = { micro: number; meso: number; macro: number };
+type Point = { micro: number; meso: number; macro: number; weight?: number };
 type Dot = Point & { label?: string; color?: string };
 
 const N = 10; // subdivision rows -> N^2 cells
@@ -43,18 +43,18 @@ export default function TernaryHeatmap({
     u * A[1] + v * B[1] + w * C[1],
   ];
 
-  // barycentric weights per game
-  const weights = points
+  // barycentric coords per game, carrying an optional density weight
+  const bary = points
     .map((p) => {
       const sum = p.micro + p.meso + p.macro;
       if (!sum) return null;
-      return [p.micro / sum, p.meso / sum, p.macro / sum] as const;
+      return { u: p.micro / sum, v: p.meso / sum, w: p.macro / sum, wt: p.weight ?? 1 };
     })
-    .filter((x): x is readonly [number, number, number] => x !== null);
+    .filter((x): x is { u: number; v: number; w: number; wt: number } => x !== null);
 
-  // assign each game to a subdivision cell
+  // assign each game to a subdivision cell (weighted)
   const counts = new Map<string, number>();
-  for (const [u, v, w] of weights) {
+  for (const { u, v, w, wt } of bary) {
     let i = Math.min(Math.floor(u * N), N - 1);
     let j = Math.min(Math.floor(v * N), N - 1);
     let k = Math.min(Math.floor(w * N), N - 1);
@@ -69,7 +69,7 @@ export default function TernaryHeatmap({
       else k++;
     }
     const key = `${i},${j},${k}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    counts.set(key, (counts.get(key) ?? 0) + wt);
   }
   const max = Math.max(1, ...counts.values());
 
@@ -106,12 +106,13 @@ export default function TernaryHeatmap({
     }
   }
 
-  // centroid of the library
+  // weighted centroid of the library
   let centroid: [number, number] | null = null;
-  if (weights.length) {
-    const mu = weights.reduce((s, w) => s + w[0], 0) / weights.length;
-    const mv = weights.reduce((s, w) => s + w[1], 0) / weights.length;
-    const mw = weights.reduce((s, w) => s + w[2], 0) / weights.length;
+  if (bary.length) {
+    const wsum = bary.reduce((s, b) => s + b.wt, 0) || 1;
+    const mu = bary.reduce((s, b) => s + b.u * b.wt, 0) / wsum;
+    const mv = bary.reduce((s, b) => s + b.v * b.wt, 0) / wsum;
+    const mw = bary.reduce((s, b) => s + b.w * b.wt, 0) / wsum;
     centroid = toXY(mu, mv, mw);
   }
 

@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     );
 
   // fetch owned games
-  let owned: { appid: number; name?: string }[];
+  let owned: { appid: number; name?: string; playtime_forever?: number }[];
   try {
     const res = await timeoutFetch(
       `${STEAM}/IPlayerService/GetOwnedGames/v1/?key=${key}&steamid=${steamId}` +
@@ -94,18 +94,28 @@ export async function POST(req: NextRequest) {
     if (data) matched.push(...data);
   }
 
+  // appid -> minutes played, so we can weight the profile by real playtime
+  const playtimeByAppid = new Map(
+    owned.map((g) => [g.appid, g.playtime_forever ?? 0])
+  );
+
   if (matched.length) {
+    // merge (not ignore) so a re-import refreshes playtime
     await supabase.from("user_games").upsert(
-      matched.map((m) => ({ user_id: user.id, game_id: m.id })),
-      { onConflict: "user_id,game_id", ignoreDuplicates: true }
+      matched.map((m) => ({
+        user_id: user.id,
+        game_id: m.id,
+        playtime_minutes: playtimeByAppid.get(m.steam_appid) ?? null,
+      })),
+      { onConflict: "user_id,game_id" }
     );
   }
 
-  // owned games we haven't scored yet — named, so they can be scored on demand
+  // owned games we haven't scored yet — named + playtime, scored on demand
   const matchedAppids = new Set(matched.map((m) => m.steam_appid));
   const unmatched = owned
     .filter((g) => g.name && !matchedAppids.has(g.appid))
-    .map((g) => ({ appid: g.appid, name: g.name as string }))
+    .map((g) => ({ appid: g.appid, name: g.name as string, playtime: g.playtime_forever ?? 0 }))
     .slice(0, 500); // cap payload
 
   return NextResponse.json({

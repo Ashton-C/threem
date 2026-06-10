@@ -23,6 +23,7 @@ type Game = {
   subgenres?: string[] | null;
   publisher?: string | null;
   release_year?: number | null;
+  playtime_minutes?: number | null;
 };
 
 type ScoreResult = {

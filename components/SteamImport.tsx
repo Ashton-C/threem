@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 
-type Owned = { appid: number; name: string };
+type Owned = { appid: number; name: string; playtime?: number };
 type ImportResult = { total: number; matched: number; unmatched: Owned[]; hint?: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -46,8 +46,8 @@ export default function SteamImport({ onImported }: { onImported: () => void }) 
     setBusy(false);
   }
 
-  // score a single owned game by name; add to library if recognized
-  async function scoreOne(name: string): Promise<"added" | "skip" | "429"> {
+  // score a single owned game by name; add to library (with playtime) if recognized
+  async function scoreOne(name: string, playtime?: number): Promise<"added" | "skip" | "429"> {
     const res = await fetch("/api/score", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -59,7 +59,7 @@ export default function SteamImport({ onImported }: { onImported: () => void }) 
       await fetch("/api/library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ game_id: data.game.id }),
+        body: JSON.stringify({ game_id: data.game.id, playtime_minutes: playtime ?? 0 }),
       });
       return "added";
     }
@@ -67,7 +67,7 @@ export default function SteamImport({ onImported }: { onImported: () => void }) 
   }
 
   async function scoreGame(g: Owned) {
-    const r = await scoreOne(g.name);
+    const r = await scoreOne(g.name, g.playtime);
     if (r === "added") {
       setAddedCount((c) => c + 1);
       onImported();
@@ -83,11 +83,11 @@ export default function SteamImport({ onImported }: { onImported: () => void }) 
       if (stopRef.current) break;
       const g = list[i];
       setProgress({ done: i, total: list.length, current: g.name });
-      let r = await scoreOne(g.name);
+      let r = await scoreOne(g.name, g.playtime);
       if (r === "429") {
         await sleep(6000); // backoff on rate limit, then retry once
         if (stopRef.current) break;
-        r = await scoreOne(g.name);
+        r = await scoreOne(g.name, g.playtime);
       }
       if (r === "added") {
         setAddedCount((c) => c + 1);
