@@ -1,7 +1,7 @@
 // Aggregate stats over the whole scored catalog. Pure function so the
 // /api/stats route and the /stats page share one implementation.
 
-import { archetype } from "./archetype";
+import { archetype, ARCHETYPES } from "./archetype";
 
 export type StatRow = {
   micro: number;
@@ -48,9 +48,9 @@ export function computeStats(rows: StatRow[]): Stats {
     genres: [...genreCounts.entries()]
       .map(([genre, count]) => ({ genre, count }))
       .sort((a, b) => b.count - a.count),
-    archetypes: ["Executor", "Tactician", "Strategist", "Hybrid"].map((name) => ({
-      name,
-      count: archCounts.get(name) ?? 0,
+    archetypes: ARCHETYPES.map((a) => ({
+      name: a.name,
+      count: archCounts.get(a.name) ?? 0,
     })),
   };
 }

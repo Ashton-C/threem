@@ -63,6 +63,8 @@ export default function Home() {
     total: number;
     genres: { genre: string; count: number }[];
   } | null>(null);
+  const [steamReturn, setSteamReturn] = useState<string | null>(null);
+  const [steamError, setSteamError] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadSpotlight = useCallback(async () => {
@@ -83,6 +85,17 @@ export default function Home() {
       setLibrary(data.games ?? []);
     } catch {
       setLibrary(null);
+    }
+  }, []);
+
+  // pick up a verified Steam sign-in return (?steam=<id>) and clean the URL
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const id = p.get("steam");
+    if (id) setSteamReturn(id);
+    if (p.get("steam_error")) setSteamError(true);
+    if (id || p.get("steam_error")) {
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
@@ -153,6 +166,17 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
       <SiteHeader right={<AuthPanel onUser={setUser} />} />
+
+      {steamError && (
+        <p className="mb-4 text-sm" style={{ color: "var(--color-micro)" }}>
+          Steam sign-in didn&apos;t complete. Please try again.
+        </p>
+      )}
+      {steamReturn && !user && (
+        <p className="mb-4 text-sm text-fog">
+          Signed in with Steam ✓ — now sign into 3M (top right) to import your library.
+        </p>
+      )}
 
       <div className="grid gap-12 lg:grid-cols-[1fr_280px]">
         {/* ── Main column ──────────────────────── */}
@@ -346,7 +370,7 @@ export default function Home() {
                 <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
                   Your style
                 </h2>
-                <SteamImport onImported={loadLibrary} />
+                <SteamImport onImported={loadLibrary} initialSteamId={steamReturn} />
               </div>
               <StylePanel games={library} onRemove={removeFromLibrary} />
             </section>

@@ -2,6 +2,9 @@ import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import { db } from "@/lib/supabase";
 import { computeStats } from "@/lib/stats";
+import { ARCHETYPES } from "@/lib/archetype";
+
+const ARCH_HEX = Object.fromEntries(ARCHETYPES.map((a) => [a.name, a.hex]));
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Stats — 3M" };
@@ -79,12 +82,8 @@ export default async function StatsPage() {
         {s.archetypes.map((a) => {
           const pct = (a.count / archTotal) * 100;
           if (!pct) return null;
-          const color =
-            a.name === "Executor" ? "var(--color-micro)" :
-            a.name === "Tactician" ? "var(--color-meso)" :
-            a.name === "Strategist" ? "var(--color-macro)" : "var(--color-fog)";
           return (
-            <div key={a.name} style={{ width: `${pct}%`, background: color }} className="h-8" title={`${a.name}: ${a.count}`} />
+            <div key={a.name} style={{ width: `${pct}%`, background: ARCH_HEX[a.name] ?? "var(--color-fog)" }} className="h-8" title={`${a.name}: ${a.count}`} />
           );
         })}
       </div>
