@@ -21,12 +21,15 @@ RULES:
 1. Write the reason BEFORE the number.
 2. Unrecognized game OR non-game input -> "recognized": false, no guessed scores.
 3. "game" must be the most widely used short title: drop creator/brand prefixes ("Sid Meier's", "Tom Clancy's") and trademark symbols.
-4. Output ONLY this JSON, no markdown:
+4. "genre" is the single primary genre; "subgenres" are 1-3 more specific labels. "publisher" is the original publisher; "release_year" is the first release. Use null when genuinely unsure — do not guess.
+5. Output ONLY this JSON, no markdown:
 {"game":"<canonical name>","recognized":<bool>,
  "micro":{"reason":"<line>","score":<0-10>},
  "meso":{"reason":"<line>","score":<0-10>},
  "macro":{"reason":"<line>","score":<0-10>},
- "confidence":"<high|medium|low>"}`;
+ "confidence":"<high|medium|low>",
+ "genre":"<primary genre>","subgenres":["<1-3 labels>"],
+ "publisher":"<publisher or null>","release_year":<year or null>}`;
 
 export type AxisScore = { reason: string; score: number };
 export type ScoreResult =
@@ -38,6 +41,10 @@ export type ScoreResult =
       meso: AxisScore;
       macro: AxisScore;
       confidence: string;
+      genre?: string | null;
+      subgenres?: string[] | null;
+      publisher?: string | null;
+      release_year?: number | null;
     };
 
 /** Calls Gemini and parses the rubric JSON. Throws on API or parse failure. */

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:scoring": "node --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts"
+    "test:scoring": "node --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",
+    "seed:top50": "node --experimental-strip-types --env-file=.env.local scripts/seed-top50.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
