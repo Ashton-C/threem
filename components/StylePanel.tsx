@@ -59,18 +59,27 @@ export default function StylePanel({
         | "macro")
     : null;
 
-  const [recs, setRecs] = useState<Rec[]>([]);
+  const [recs, setRecs] = useState<Rec[]>([]); // round out the weakest axis
+  const [more, setMore] = useState<Rec[]>([]); // more of what you already like
   const libIds = games.map((g) => g.id).join(",");
+  const centroid = avg ? `${avg.micro},${avg.meso},${avg.macro}` : "";
   useEffect(() => {
-    if (!weakest) return setRecs([]);
+    if (!weakest) {
+      setRecs([]);
+      setMore([]);
+      return;
+    }
     const owned = new Set(libIds ? libIds.split(",") : []);
-    fetch(`/api/recommend?axis=${weakest}`)
-      .then((r) => r.json())
-      .then((d) =>
-        setRecs((d.games ?? []).filter((g: Rec) => !owned.has(g.id)).slice(0, 3))
-      )
-      .catch(() => setRecs([]));
-  }, [weakest, libIds]);
+    const take = (url: string, set: (r: Rec[]) => void) =>
+      fetch(url)
+        .then((r) => r.json())
+        .then((d) =>
+          set((d.games ?? []).filter((g: Rec) => !owned.has(g.id)).slice(0, 3))
+        )
+        .catch(() => set([]));
+    take(`/api/recommend?axis=${weakest}`, setRecs);
+    take(`/api/recommend?near=${encodeURIComponent(centroid)}`, setMore);
+  }, [weakest, libIds, centroid]);
 
   if (!games.length || !avg)
     return (
@@ -125,26 +134,49 @@ export default function StylePanel({
         </div>
       </div>
 
-      {recs.length > 0 && weakLabel && (
-        <div className="mt-6 border-t border-edge pt-5">
-          <p className="text-sm text-fog">
-            Round out your{" "}
-            <span className="font-semibold" style={{ color: weakLabel.color }}>
-              {weakLabel.label}
-            </span>{" "}
-            — try:
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {recs.map((r) => (
-              <Link
-                key={r.id}
-                href={`/game/${r.slug}`}
-                className="rounded-full border border-edge px-3 py-1 text-xs transition hover:border-macro hover:text-paper"
-              >
-                {r.name}
-              </Link>
-            ))}
-          </div>
+      {(recs.length > 0 || more.length > 0) && (
+        <div className="mt-6 grid gap-5 border-t border-edge pt-5 sm:grid-cols-2">
+          {more.length > 0 && (
+            <div>
+              <p className="text-sm text-fog">
+                <span className="font-semibold text-paper">More of what you like</span>{" "}
+                — closest to your taste:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {more.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/game/${r.slug}`}
+                    className="rounded-full border border-edge px-3 py-1 text-xs transition hover:border-macro hover:text-paper"
+                  >
+                    {r.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {recs.length > 0 && weakLabel && (
+            <div>
+              <p className="text-sm text-fog">
+                Round out your{" "}
+                <span className="font-semibold" style={{ color: weakLabel.color }}>
+                  {weakLabel.label}
+                </span>{" "}
+                — try:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recs.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/game/${r.slug}`}
+                    className="rounded-full border border-edge px-3 py-1 text-xs transition hover:border-macro hover:text-paper"
+                  >
+                    {r.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
