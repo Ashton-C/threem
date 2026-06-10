@@ -2,31 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { slugify } from "@/lib/slug";
 import { checkRateLimit } from "@/lib/ratelimit";
-
-const GEMINI_MODEL = "gemini-3.5-flash"; // best free-tier model; rubric carries the weight
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-
-const SYSTEM = `You are a game analyst scoring video games on three axes, each 0-10.
-Score INDEPENDENTLY — a game can be high or low on all three at once.
-
-Micro: moment-to-moment mechanical execution (aim, reaction, combos, precise control).
-Meso: mid-term tactics ~30s-few min (reading opponents, cooldown tracking, engage/disengage).
-Macro: long-term strategy (economy, map control, build orders, objective pacing).
-
-ANCHORS — calibrate, do not drift:
-Micro 9-10: CS2, StarCraft II, Osu!, Street Fighter, Apex. Micro 5-6: Dark Souls, Monster Hunter. Micro 1-2: Civilization, Stardew.
-Meso 9-10: Dota 2, Poker, Magic, Rainbow Six Siege. Meso 5-6: Apex, Monster Hunter. Meso 1-2: Osu!, Stardew.
-Macro 9-10: Civilization, Age of Empires, StarCraft II, Factorio. Macro 5-6: Hearthstone, Magic. Macro 1-2: Osu!, Street Fighter.
-
-RULES:
-1. Write the reason BEFORE the number.
-2. Unrecognized game OR non-game input -> "recognized": false, no guessed scores.
-3. Output ONLY this JSON, no markdown:
-{"game":"<canonical name>","recognized":<bool>,
- "micro":{"reason":"<line>","score":<0-10>},
- "meso":{"reason":"<line>","score":<0-10>},
- "macro":{"reason":"<line>","score":<0-10>},
- "confidence":"<high|medium|low>"}`;
+import { scoreGame } from "@/lib/scoring";
 
 export async function POST(req: NextRequest) {
   const { input } = await req.json();
@@ -60,49 +36,15 @@ export async function POST(req: NextRequest) {
     );
 
   // 3. miss -> score with LLM
-  let text = "";
+  let parsed;
   try {
-    const llmRes = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": process.env.GOOGLE_AI_API_SECRET!,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `GAME: ${input}` }] }],
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        generationConfig: {
-          temperature: 0.2, // low temp = stable scores
-          maxOutputTokens: 1500, // headroom for thinking tokens
-          responseMimeType: "application/json",
-          thinkingConfig: { thinkingLevel: "low" },
-        },
-      }),
-    });
-    if (!llmRes.ok) {
-      console.error("threem: Gemini error", llmRes.status, await llmRes.text());
-      return NextResponse.json(
-        { error: "scoring temporarily unavailable" },
-        { status: 502 }
-      );
-    }
-    const data = await llmRes.json();
-    text = (data.candidates?.[0]?.content?.parts ?? [])
-      .map((p: { text?: string }) => p.text ?? "")
-      .join("");
+    parsed = await scoreGame(input);
   } catch (err) {
     console.error("threem: LLM scoring call failed", err);
     return NextResponse.json(
       { error: "scoring temporarily unavailable" },
       { status: 502 }
     );
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-  } catch {
-    return NextResponse.json({ error: "bad model output" }, { status: 502 });
   }
 
   if (!parsed.recognized)
