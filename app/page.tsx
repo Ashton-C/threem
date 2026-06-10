@@ -320,9 +320,11 @@ export default function Home() {
             </section>
           )}
 
-          <footer className="mt-16 text-xs leading-relaxed text-fog/60">
-            Scores are LLM-judged against fixed anchors and cached — the first
-            search of a game does the thinking, every search after is instant.
+          <footer className="mt-16 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-relaxed text-fog/60">
+            <Link href="/about" className="transition hover:text-fog">How scoring works</Link>
+            <Link href="/browse?top=1" className="transition hover:text-fog">Top 50</Link>
+            <Link href="/compare" className="transition hover:text-fog">Compare</Link>
+            <span>· LLM-judged against fixed anchors, then cached.</span>
           </footer>
         </section>
 

@@ -1,27 +1,14 @@
 import Link from "next/link";
 import { db } from "@/lib/supabase";
+import GameGrid, { type GridRow } from "@/components/GameGrid";
 
 export const dynamic = "force-dynamic";
 
-type Row = {
-  id: string;
-  slug: string;
-  name: string;
-  micro: number;
-  meso: number;
-  macro: number;
-  thumbnail: string | null;
-  genre: string | null;
-  subgenres: string[] | null;
-  release_year: number | null;
-  featured_rank: number | null;
+const AXIS_LABEL: Record<string, string> = {
+  micro: "Micro",
+  meso: "Meso",
+  macro: "Macro",
 };
-
-const AXES = [
-  { key: "micro", label: "M", color: "var(--color-micro)" },
-  { key: "meso", label: "M", color: "var(--color-meso)" },
-  { key: "macro", label: "M", color: "var(--color-macro)" },
-] as const;
 
 export async function generateMetadata({
   searchParams,
@@ -42,13 +29,28 @@ export default async function BrowsePage({
   const genre = sp.genre?.slice(0, 60);
   const publisher = sp.publisher?.slice(0, 80);
   const top = sp.top != null;
+  const sort = ["micro", "meso", "macro"].includes(sp.sort ?? "") ? sp.sort! : null;
+  // axis range filters: ?min_macro=8 etc. clamp to 0..10
+  const clamp = (v?: string) => {
+    if (v == null) return null;
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(10, Math.max(0, n)) : null;
+  };
+  const ranges = (["micro", "meso", "macro"] as const).map((ax) => ({
+    ax,
+    min: clamp(sp[`min_${ax}`]),
+    max: clamp(sp[`max_${ax}`]),
+  }));
 
   let q = db
     .from("games")
     .select("id,slug,name,micro,meso,macro,thumbnail,genre,subgenres,release_year,featured_rank");
 
   let heading: string;
-  if (top) {
+  if (sort) {
+    q = q.order(sort, { ascending: false }).order("name").limit(100);
+    heading = `Most ${AXIS_LABEL[sort]}`;
+  } else if (top) {
     q = q.not("featured_rank", "is", null).order("featured_rank", { ascending: true });
     heading = "Top 50";
   } else if (publisher) {
@@ -64,8 +66,15 @@ export default async function BrowsePage({
     heading = "All games";
   }
 
+  // apply axis range filters (compose with any of the above)
+  for (const r of ranges) {
+    if (r.min != null) q = q.gte(r.ax, r.min);
+    if (r.max != null) q = q.lte(r.ax, r.max);
+  }
+
   const { data } = await q;
-  const rows = (data ?? []) as Row[];
+  const rows = (data ?? []) as GridRow[];
+  const activeRanges = ranges.filter((r) => r.min != null || r.max != null);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
@@ -78,56 +87,55 @@ export default async function BrowsePage({
             {heading}
             <span className="ml-3 text-base font-normal text-fog">{rows.length}</span>
           </h1>
-          {!top && (publisher || genre) && (
+          {!top && !sort && (publisher || genre) && (
             <p className="mt-1 text-sm text-fog">
               {publisher ? "Published by" : "Tagged"} {heading}
             </p>
           )}
+          {activeRanges.length > 0 && (
+            <p className="mt-1 text-sm text-fog">
+              {activeRanges
+                .map((r) =>
+                  `${AXIS_LABEL[r.ax]} ${r.min ?? 0}–${r.max ?? 10}`
+                )
+                .join(" · ")}
+            </p>
+          )}
         </div>
         <Link
-          href="/browse?top=1"
+          href="/compare"
           className="rounded-full border border-edge px-3 py-1.5 text-sm text-fog transition hover:border-macro hover:text-paper"
         >
-          Top 50 →
+          Compare →
+        </Link>
+      </div>
+
+      {/* axis leaderboards */}
+      <div className="mt-5 flex flex-wrap gap-2">
+        <span className="self-center text-xs uppercase tracking-widest text-fog">Leaderboards</span>
+        {(["micro", "meso", "macro"] as const).map((ax) => (
+          <Link
+            key={ax}
+            href={`/browse?sort=${ax}`}
+            className="rounded-full border border-edge px-3 py-1 text-xs font-semibold transition hover:brightness-125"
+            style={{ color: `var(--color-${ax})`, borderColor: sort === ax ? `var(--color-${ax})` : "var(--color-edge)" }}
+          >
+            Most {AXIS_LABEL[ax]}
+          </Link>
+        ))}
+        <Link
+          href="/browse?top=1"
+          className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-macro hover:text-paper"
+        >
+          Top 50
         </Link>
       </div>
 
       {rows.length === 0 ? (
-        <p className="mt-10 text-fog">No games here yet.</p>
+        <p className="mt-10 text-fog">No games match.</p>
       ) : (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((r) => (
-            <Link
-              key={r.id}
-              href={`/game/${r.slug}`}
-              className="group overflow-hidden rounded-xl border border-edge bg-panel transition hover:border-macro"
-            >
-              {r.thumbnail ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={r.thumbnail} alt="" className="h-28 w-full object-cover transition group-hover:brightness-110" />
-              ) : (
-                <div className="h-28 w-full bg-ink2" />
-              )}
-              <div className="p-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate font-semibold">
-                    {r.featured_rank && (
-                      <span className="mr-1.5 font-mono text-xs text-fog">#{r.featured_rank}</span>
-                    )}
-                    {r.name}
-                  </p>
-                  {r.release_year && <span className="shrink-0 text-xs text-fog">{r.release_year}</span>}
-                </div>
-                <div className="mt-2 flex gap-1">
-                  {AXES.map((a) => (
-                    <div key={a.color} className="h-1.5 flex-1 overflow-hidden rounded-full bg-edge">
-                      <div className="h-full rounded-full" style={{ width: `${r[a.key] * 10}%`, background: a.color }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Link>
-          ))}
+        <div className="mt-8">
+          <GameGrid rows={rows} />
         </div>
       )}
     </main>

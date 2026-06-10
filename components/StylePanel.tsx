@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import TernaryHeatmap from "./TernaryHeatmap";
 
 type LibGame = {
@@ -8,6 +10,8 @@ type LibGame = {
   meso: number;
   macro: number;
 };
+
+type Rec = { id: string; slug: string; name: string };
 
 const AXES = [
   { key: "micro", label: "Micro", color: "var(--color-micro)" },
@@ -38,7 +42,37 @@ export default function StylePanel({
   games: LibGame[];
   onRemove: (gameId: string) => void;
 }) {
-  if (!games.length)
+  // hooks must run before any early return
+  const avg = games.length
+    ? {
+        micro: games.reduce((s, g) => s + g.micro, 0) / games.length,
+        meso: games.reduce((s, g) => s + g.meso, 0) / games.length,
+        macro: games.reduce((s, g) => s + g.macro, 0) / games.length,
+      }
+    : null;
+
+  // the axis the user leans on least — recommend toward it
+  const weakest = avg
+    ? (Object.entries(avg).sort((a, b) => a[1] - b[1])[0][0] as
+        | "micro"
+        | "meso"
+        | "macro")
+    : null;
+
+  const [recs, setRecs] = useState<Rec[]>([]);
+  const libIds = games.map((g) => g.id).join(",");
+  useEffect(() => {
+    if (!weakest) return setRecs([]);
+    const owned = new Set(libIds ? libIds.split(",") : []);
+    fetch(`/api/recommend?axis=${weakest}`)
+      .then((r) => r.json())
+      .then((d) =>
+        setRecs((d.games ?? []).filter((g: Rec) => !owned.has(g.id)).slice(0, 3))
+      )
+      .catch(() => setRecs([]));
+  }, [weakest, libIds]);
+
+  if (!games.length || !avg)
     return (
       <p className="mt-4 text-sm text-fog">
         Score a game and hit <span className="text-paper">+ Library</span> to
@@ -46,12 +80,8 @@ export default function StylePanel({
       </p>
     );
 
-  const avg = {
-    micro: games.reduce((s, g) => s + g.micro, 0) / games.length,
-    meso: games.reduce((s, g) => s + g.meso, 0) / games.length,
-    macro: games.reduce((s, g) => s + g.macro, 0) / games.length,
-  };
   const arch = archetype(avg);
+  const weakLabel = weakest ? AXES.find((a) => a.key === weakest)! : null;
 
   return (
     <div
@@ -94,6 +124,29 @@ export default function StylePanel({
           </p>
         </div>
       </div>
+
+      {recs.length > 0 && weakLabel && (
+        <div className="mt-6 border-t border-edge pt-5">
+          <p className="text-sm text-fog">
+            Round out your{" "}
+            <span className="font-semibold" style={{ color: weakLabel.color }}>
+              {weakLabel.label}
+            </span>{" "}
+            — try:
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {recs.map((r) => (
+              <Link
+                key={r.id}
+                href={`/game/${r.slug}`}
+                className="rounded-full border border-edge px-3 py-1 text-xs transition hover:border-macro hover:text-paper"
+              >
+                {r.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-5 flex flex-wrap gap-1.5">
         {games.map((g) => (

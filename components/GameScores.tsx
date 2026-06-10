@@ -1,6 +1,6 @@
 import Link from "next/link";
 import ScoreBar from "./ScoreBar";
-import TernaryHeatmap from "./TernaryHeatmap";
+import GameTriangle from "./GameTriangle";
 
 export type GameLike = {
   id: string;
@@ -35,10 +35,6 @@ export default function GameScores({
   cached?: boolean;
   actionSlot?: React.ReactNode;
 }) {
-  const dot = [
-    { micro: game.micro, meso: game.meso, macro: game.macro, color: "var(--color-paper)" },
-  ];
-
   return (
     <article
       className="glow-box overflow-hidden rounded-2xl bg-panel"
@@ -114,8 +110,8 @@ export default function GameScores({
             ))}
           </div>
           <div className="mx-auto w-full max-w-[220px] sm:w-[200px]">
-            <TernaryHeatmap points={[]} dots={dot} heatmap={false} size={200} />
-            <p className="mt-1 text-center text-[11px] text-fog/70">where it sits in 3M space</p>
+            <GameTriangle game={game} size={200} />
+            <p className="mt-1 text-center text-[11px] text-fog/70">balance across the three axes</p>
           </div>
         </div>
 
