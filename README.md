@@ -4,7 +4,7 @@ Type a game, get its Micro / Meso / Macro skill breakdown, scored by an LLM
 against a fixed rubric. No accounts. The DB starts empty and fills itself as
 people search.
 
-**Stack:** Next.js (App Router) · Supabase (Postgres) · Anthropic API · Vercel.
+**Stack:** Next.js (App Router) · Supabase (Postgres) · Google Gemini API (free tier) · Vercel.
 
 The frontend never talks to Supabase or the LLM directly — everything goes
 through one server-side route:
@@ -28,7 +28,7 @@ ever costs one LLM call, then it's free forever.
    - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (project settings → API).
      The service-role key only ever lives server-side — never expose it in a
      `NEXT_PUBLIC_` var or client component.
-   - `ANTHROPIC_API_KEY` ([console.anthropic.com](https://console.anthropic.com))
+   - `GOOGLE_AI_API_SECRET` ([aistudio.google.com](https://aistudio.google.com), free tier — scoring uses `gemini-3.5-flash`)
    - `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`
      ([upstash.com](https://upstash.com), free tier) — rate-limits new
      (LLM-billed) lookups to 10 req / 10 s per IP. Skipped if unset, which is
