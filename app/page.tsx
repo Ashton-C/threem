@@ -1,7 +1,11 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import AuthPanel from "@/components/AuthPanel";
+import StylePanel from "@/components/StylePanel";
 
 type Game = {
+  id: string;
   name: string;
   micro: number;
   meso: number;
@@ -47,7 +51,47 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<string[]>([]);
   const [spotlight, setSpotlight] = useState<SpotlightGame[] | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [library, setLibrary] = useState<Game[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/library");
+      if (!res.ok) {
+        setLibrary(null);
+        return;
+      }
+      const data = await res.json();
+      setLibrary(data.games ?? []);
+    } catch {
+      setLibrary(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) loadLibrary();
+    else setLibrary(null);
+  }, [user, loadLibrary]);
+
+  async function addToLibrary(gameId: string) {
+    await fetch("/api/library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game_id: gameId }),
+    });
+    loadLibrary();
+  }
+
+  async function removeFromLibrary(gameId: string) {
+    await fetch(`/api/library?game_id=${encodeURIComponent(gameId)}`, {
+      method: "DELETE",
+    });
+    loadLibrary();
+  }
+
+  const inLibrary = (gameId: string) =>
+    library?.some((g) => g.id === gameId) ?? false;
 
   const loadSpotlight = useCallback(async () => {
     try {
@@ -104,18 +148,21 @@ export default function Home() {
   const g = result?.game;
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
-      <header className="mb-10">
-        <h1 className="text-4xl font-black tracking-tight">
-          3M<span className="text-fog">.</span>
-        </h1>
-        <p className="mt-1 text-sm text-fog">
-          <span style={{ color: "var(--color-micro)" }}>micro</span>
-          {" · "}
-          <span style={{ color: "var(--color-meso)" }}>meso</span>
-          {" · "}
-          <span style={{ color: "var(--color-macro)" }}>macro</span>
-          {" — what kind of skill does a game actually ask of you?"}
-        </p>
+      <header className="mb-10 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black tracking-tight">
+            3M<span className="text-fog">.</span>
+          </h1>
+          <p className="mt-1 text-sm text-fog">
+            <span style={{ color: "var(--color-micro)" }}>micro</span>
+            {" · "}
+            <span style={{ color: "var(--color-meso)" }}>meso</span>
+            {" · "}
+            <span style={{ color: "var(--color-macro)" }}>macro</span>
+            {" — what kind of skill does a game actually ask of you?"}
+          </p>
+        </div>
+        <AuthPanel onUser={setUser} />
       </header>
 
       <div className="grid gap-12 lg:grid-cols-[280px_1fr]">
@@ -338,18 +385,45 @@ export default function Home() {
                   ))}
                 </div>
 
-                {g.steam_url && (
-                  <a
-                    href={g.steam_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-7 inline-block rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-paper transition hover:border-fog"
-                  >
-                    View on Steam ↗
-                  </a>
-                )}
+                <div className="mt-7 flex flex-wrap gap-2">
+                  {g.steam_url && (
+                    <a
+                      href={g.steam_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-paper transition hover:border-fog"
+                    >
+                      View on Steam ↗
+                    </a>
+                  )}
+                  {user &&
+                    (inLibrary(g.id) ? (
+                      <button
+                        onClick={() => removeFromLibrary(g.id)}
+                        className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-fog transition hover:border-micro hover:text-micro"
+                      >
+                        ✓ In library
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => addToLibrary(g.id)}
+                        className="rounded-lg bg-paper px-4 py-2 text-sm font-semibold text-ink transition hover:opacity-85"
+                      >
+                        + Library
+                      </button>
+                    ))}
+                </div>
               </div>
             </article>
+          )}
+
+          {user && library !== null && (
+            <section className="mt-14">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-fog">
+                Your style
+              </h2>
+              <StylePanel games={library} onRemove={removeFromLibrary} />
+            </section>
           )}
 
           <footer className="mt-16 text-xs text-fog/60">
