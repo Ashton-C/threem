@@ -60,13 +60,22 @@ export async function POST(req: NextRequest) {
     );
 
   // 3. miss -> score with LLM
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001", // cheap model; rubric carries the weight
-    max_tokens: 400,
-    temperature: 0.2, // low temp = stable scores
-    system: SYSTEM,
-    messages: [{ role: "user", content: `GAME: ${input}` }],
-  });
+  let msg;
+  try {
+    msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001", // cheap model; rubric carries the weight
+      max_tokens: 400,
+      temperature: 0.2, // low temp = stable scores
+      system: SYSTEM,
+      messages: [{ role: "user", content: `GAME: ${input}` }],
+    });
+  } catch (err) {
+    console.error("threem: LLM scoring call failed", err);
+    return NextResponse.json(
+      { error: "scoring temporarily unavailable" },
+      { status: 502 }
+    );
+  }
 
   const text = msg.content.find((b) => b.type === "text")?.text ?? "";
   let parsed;

@@ -25,6 +25,12 @@ if (!enabled && process.env.NODE_ENV === "production") {
 /** Returns true if the request is allowed, false if rate-limited. */
 export async function checkRateLimit(key: string): Promise<boolean> {
   if (!ratelimit) return true;
-  const { success } = await ratelimit.limit(key);
-  return success;
+  try {
+    const { success } = await ratelimit.limit(key);
+    return success;
+  } catch (err) {
+    // fail open: a Redis outage shouldn't take the endpoint down
+    console.error("threem: rate limit check failed, allowing request", err);
+    return true;
+  }
 }
