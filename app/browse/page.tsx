@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { db } from "@/lib/supabase";
 import GameGrid, { type GridRow } from "@/components/GameGrid";
 
@@ -75,18 +76,31 @@ export default async function BrowsePage({
   const { data } = await q;
   const rows = (data ?? []) as GridRow[];
   const activeRanges = ranges.filter((r) => r.min != null || r.max != null);
+  const isDefault = !sort && !top && !publisher && !genre && activeRanges.length === 0;
+
+  // genre chips for the explore hub (default view only)
+  let genreChips: { genre: string; count: number }[] = [];
+  if (isDefault) {
+    const { data: gData } = await db.from("games").select("genre");
+    const counts = new Map<string, number>();
+    for (const r of gData ?? []) if (r.genre) counts.set(r.genre, (counts.get(r.genre) ?? 0) + 1);
+    genreChips = [...counts.entries()]
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count);
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
+      <SiteHeader />
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <Link href="/" className="font-display text-sm text-fog transition hover:text-paper">
-            ← 3M
-          </Link>
           <h1 className="font-display mt-2 text-3xl font-bold">
-            {heading}
+            {isDefault ? "Explore" : heading}
             <span className="ml-3 text-base font-normal text-fog">{rows.length}</span>
           </h1>
+          {isDefault && (
+            <p className="mt-1 text-sm text-fog">Every game we&apos;ve scored — roam by genre, axis, or rank.</p>
+          )}
           {!top && !sort && (publisher || genre) && (
             <p className="mt-1 text-sm text-fog">
               {publisher ? "Published by" : "Tagged"} {heading}
@@ -130,6 +144,22 @@ export default async function BrowsePage({
           Top 50
         </Link>
       </div>
+
+      {/* genre chips — explore hub */}
+      {genreChips.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-2">
+          <span className="self-center text-xs uppercase tracking-widest text-fog">Genres</span>
+          {genreChips.map((g) => (
+            <Link
+              key={g.genre}
+              href={`/browse?genre=${encodeURIComponent(g.genre)}`}
+              className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-macro hover:text-paper"
+            >
+              {g.genre} <span className="text-fog/50">{g.count}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="mt-10 text-fog">No games match.</p>

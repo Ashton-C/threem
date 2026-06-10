@@ -1,4 +1,4 @@
-import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { db } from "@/lib/supabase";
 import CompareClient, { type CompareGame } from "@/components/CompareClient";
 
@@ -28,9 +28,7 @@ export default async function ComparePage({
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
-      <Link href="/" className="font-display text-sm text-fog transition hover:text-paper">
-        ← 3M
-      </Link>
+      <SiteHeader />
       <h1 className="font-display mt-2 text-3xl font-bold">Compare</h1>
       <p className="mt-1 text-sm text-fog">
         Stack up to three games on one triangle.

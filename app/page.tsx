@@ -6,6 +6,7 @@ import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
 import GameScores from "@/components/GameScores";
 import SteamImport from "@/components/SteamImport";
+import SiteHeader from "@/components/SiteHeader";
 
 type Game = {
   id: string;
@@ -57,6 +58,10 @@ export default function Home() {
   const [spotlight, setSpotlight] = useState<SpotlightGame[] | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [library, setLibrary] = useState<Game[] | null>(null);
+  const [stats, setStats] = useState<{
+    total: number;
+    genres: { genre: string; count: number }[];
+  } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadSpotlight = useCallback(async () => {
@@ -81,6 +86,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => { loadSpotlight(); }, [loadSpotlight]);
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((d) => setStats({ total: d.total ?? 0, genres: d.genres ?? [] }))
+      .catch(() => setStats(null));
+  }, []);
   useEffect(() => {
     if (user) loadLibrary();
     else setLibrary(null);
@@ -140,20 +151,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
-      {/* ── Header ───────────────────────────── */}
-      <header className="mb-10 flex flex-wrap items-center justify-between gap-4">
-        <button onClick={() => { setResult(null); setInput(""); }} className="group flex items-baseline gap-2">
-          <span className="font-display text-3xl font-bold tracking-tight glow-text" style={{ ["--glow" as string]: "var(--color-macro)" }}>
-            3M
-          </span>
-          <span className="flex gap-1">
-            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-micro)" }} />
-            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-meso)" }} />
-            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-macro)" }} />
-          </span>
-        </button>
-        <AuthPanel onUser={setUser} />
-      </header>
+      <SiteHeader right={<AuthPanel onUser={setUser} />} />
 
       <div className="grid gap-12 lg:grid-cols-[1fr_280px]">
         {/* ── Main column ──────────────────────── */}
@@ -237,6 +235,35 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+
+              {/* data strip — the collection at a glance */}
+              {stats && stats.total > 0 && (
+                <div className="mt-10 border-t border-edge pt-6">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm text-fog">
+                      <span className="font-display text-lg font-bold text-paper">{stats.total}</span>{" "}
+                      games scored and counting
+                    </p>
+                    <div className="flex gap-3 text-sm">
+                      <Link href="/browse" className="text-fog transition hover:text-paper">Explore →</Link>
+                      <Link href="/stats" className="text-fog transition hover:text-paper">Stats →</Link>
+                    </div>
+                  </div>
+                  {stats.genres.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {stats.genres.slice(0, 8).map((g) => (
+                        <Link
+                          key={g.genre}
+                          href={`/browse?genre=${encodeURIComponent(g.genre)}`}
+                          className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-macro hover:text-paper"
+                        >
+                          {g.genre}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/supabase";
 import GameScores, { type GameLike } from "@/components/GameScores";
@@ -60,12 +61,7 @@ export default async function GamePage({
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
-      <Link
-        href="/"
-        className="font-display text-sm text-fog transition hover:text-paper"
-      >
-        ← 3M
-      </Link>
+      <SiteHeader />
 
       <div className="mt-6">
         <GameScores

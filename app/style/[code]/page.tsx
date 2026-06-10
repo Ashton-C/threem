@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { notFound } from "next/navigation";
 import GameTriangle from "@/components/GameTriangle";
 import { decodeStyle, archetype } from "@/lib/archetype";
@@ -38,9 +39,7 @@ export default async function StylePage({
 
   return (
     <main className="mx-auto max-w-xl px-6 py-10 sm:py-14">
-      <Link href="/" className="font-display text-sm text-fog transition hover:text-paper">
-        ← 3M
-      </Link>
+      <SiteHeader />
 
       <div
         className="glow-box mt-6 rounded-2xl bg-panel p-7"

@@ -83,13 +83,13 @@ export async function POST(req: NextRequest) {
 
   // match owned appids against scored games
   const appids = owned.map((g) => g.appid).filter(Boolean);
-  const matched: { id: string; name: string }[] = [];
+  const matched: { id: string; name: string; steam_appid: number }[] = [];
   // chunk the IN() filter to keep the query reasonable
   for (let i = 0; i < appids.length; i += 300) {
     const chunk = appids.slice(i, i + 300);
     const { data } = await supabase
       .from("games")
-      .select("id,name")
+      .select("id,name,steam_appid")
       .in("steam_appid", chunk);
     if (data) matched.push(...data);
   }
@@ -101,9 +101,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // owned games we haven't scored yet — named, so they can be scored on demand
+  const matchedAppids = new Set(matched.map((m) => m.steam_appid));
+  const unmatched = owned
+    .filter((g) => g.name && !matchedAppids.has(g.appid))
+    .map((g) => ({ appid: g.appid, name: g.name as string }))
+    .slice(0, 500); // cap payload
+
   return NextResponse.json({
     total: owned.length,
     matched: matched.length,
     added: matched.map((m) => m.name),
+    unmatched,
   });
 }

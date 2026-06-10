@@ -1,4 +1,4 @@
-import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { AXIS_INFO, ANCHORS, AXIS_KEYS } from "@/lib/anchors";
 
 export const metadata = { title: "How scoring works — 3M" };
@@ -12,9 +12,7 @@ const TIERS = [
 export default function AboutPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
-      <Link href="/" className="font-display text-sm text-fog transition hover:text-paper">
-        ← 3M
-      </Link>
+      <SiteHeader />
       <h1 className="font-display mt-2 text-3xl font-bold">How scoring works</h1>
       <p className="mt-2 max-w-xl text-fog">
         Every game is scored 0–10 on three independent axes. A game can be high
