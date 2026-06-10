@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@theme {
+  --color-ink: #0b0e13;
+  --color-panel: #131823;
+  --color-edge: #232b3a;
+  --color-fog: #8c96a8;
+  --color-paper: #e8ecf4;
+  --color-micro: #ff5c7a;
+  --color-meso: #ffb454;
+  --color-macro: #4cc9f0;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
