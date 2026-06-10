@@ -6,6 +6,7 @@
 // Pure SVG, no chart library.
 
 type Point = { micro: number; meso: number; macro: number };
+type Dot = Point & { label?: string; color?: string };
 
 const N = 10; // subdivision rows -> N^2 cells
 
@@ -21,9 +22,13 @@ function ramp(t: number): string {
 export default function TernaryHeatmap({
   points,
   size = 340,
+  heatmap = true,
+  dots,
 }: {
   points: Point[];
   size?: number;
+  heatmap?: boolean; // density fill (library view). false = empty triangle (single game)
+  dots?: Dot[]; // discrete glowing markers drawn on top
 }) {
   const pad = 34;
   const W = size;
@@ -120,24 +125,45 @@ export default function TernaryHeatmap({
     >
       {cells.map((c) => {
         const t = c.count / max;
+        const filled = heatmap && c.count > 0;
         return (
           <polygon
             key={c.key}
             points={c.pts}
-            fill={c.count ? ramp(t) : "transparent"}
-            fillOpacity={c.count ? 0.25 + 0.75 * Math.pow(t, 0.7) : 0}
+            fill={filled ? ramp(t) : "transparent"}
+            fillOpacity={filled ? 0.25 + 0.75 * Math.pow(t, 0.7) : 0}
             stroke="var(--color-edge)"
             strokeWidth={0.5}
           />
         );
       })}
 
-      {centroid && (
+      {/* library centroid (heatmap mode only) */}
+      {heatmap && centroid && (
         <>
           <circle cx={centroid[0]} cy={centroid[1]} r={7} fill="none" stroke="var(--color-paper)" strokeWidth={1.5} opacity={0.9} />
           <circle cx={centroid[0]} cy={centroid[1]} r={2.5} fill="var(--color-paper)" />
         </>
       )}
+
+      {/* discrete markers (single-game or comparison mode) */}
+      {dots?.map((d, i) => {
+        const sum = d.micro + d.meso + d.macro;
+        if (!sum) return null;
+        const [x, y] = toXY(d.micro / sum, d.meso / sum, d.macro / sum);
+        const col = d.color ?? "var(--color-paper)";
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={9} fill={col} opacity={0.18} />
+            <circle cx={x} cy={y} r={4.5} fill={col} style={{ filter: `drop-shadow(0 0 6px ${col})` }} />
+            {d.label && (
+              <text x={x} y={y - 12} textAnchor="middle" fontSize={11} fontWeight={600} fill="var(--color-paper)">
+                {d.label}
+              </text>
+            )}
+          </g>
+        );
+      })}
 
       <text x={A[0]} y={-12} textAnchor="middle" fontSize={13} fontWeight={700} fill="var(--color-micro)">
         Micro

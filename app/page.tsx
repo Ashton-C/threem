@@ -1,12 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import Link from "next/link";
 import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
-import ScoreBar from "@/components/ScoreBar";
+import GameScores from "@/components/GameScores";
 
 type Game = {
   id: string;
+  slug: string;
   name: string;
   micro: number;
   meso: number;
@@ -262,91 +264,50 @@ export default function Home() {
 
           {/* Game card */}
           {g && (
-            <article
-              className="pop-in glow-box mt-8 overflow-hidden rounded-2xl bg-panel"
-              style={{ ["--glow" as string]: "var(--color-macro)" }}
-            >
-              {g.thumbnail && (
-                <div className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.thumbnail} alt={g.name} className="max-h-52 w-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
-                </div>
-              )}
-
-              <div className="p-6 sm:p-7">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <h2 className="font-display text-3xl font-bold">{g.name}</h2>
-                  {result?.cached && (
-                    <span className="rounded-full border border-edge px-2 py-0.5 text-[11px] uppercase tracking-wider text-fog">
-                      cached · instant
-                    </span>
-                  )}
-                </div>
-
-                {(g.release_year || g.publisher) && (
-                  <p className="mt-1 text-sm text-fog">
-                    {[g.release_year, g.publisher].filter(Boolean).join(" · ")}
-                  </p>
-                )}
-
-                {(g.genre || g.subgenres?.length) && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {g.genre && (
-                      <span className="rounded-full bg-edge px-2.5 py-0.5 text-xs font-semibold">{g.genre}</span>
+            <div className="pop-in mt-8">
+              <GameScores
+                game={g}
+                cached={result?.cached}
+                actionSlot={
+                  <>
+                    {g.steam_url && (
+                      <a
+                        href={g.steam_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold transition hover:border-macro hover:text-paper"
+                      >
+                        View on Steam ↗
+                      </a>
                     )}
-                    {g.subgenres?.map((sg) => (
-                      <span key={sg} className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog">{sg}</span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-7 space-y-6">
-                  {AXES.map((a, i) => (
-                    <ScoreBar
-                      key={a.key}
-                      label={a.label}
-                      desc={a.desc}
-                      score={g[a.key]}
-                      color={a.color}
-                      delay={i * 0.12}
-                      reason={g.reasoning[a.key]}
-                    />
-                  ))}
-                </div>
-
-                <div className="mt-7 flex flex-wrap gap-2">
-                  {g.steam_url && (
-                    <a
-                      href={g.steam_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold transition hover:border-macro hover:text-paper"
+                    <Link
+                      href={`/game/${g.slug}`}
+                      className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-fog transition hover:border-macro hover:text-paper"
                     >
-                      View on Steam ↗
-                    </a>
-                  )}
-                  {user &&
-                    (inLibrary(g.id) ? (
-                      <button
-                        onClick={() => removeFromLibrary(g.id)}
-                        className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-fog transition hover:text-paper"
-                        style={{ borderColor: "var(--color-micro)" }}
-                      >
-                        ✓ In library
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => addToLibrary(g.id)}
-                        className="font-display rounded-lg px-4 py-2 text-sm font-bold uppercase tracking-wider text-ink transition hover:brightness-110"
-                        style={{ background: "var(--color-macro)" }}
-                      >
-                        + Library
-                      </button>
-                    ))}
-                </div>
-              </div>
-            </article>
+                      Permalink ↗
+                    </Link>
+                    {user &&
+                      (inLibrary(g.id) ? (
+                        <button
+                          onClick={() => removeFromLibrary(g.id)}
+                          className="rounded-lg border px-4 py-2 text-sm font-semibold text-fog transition hover:text-paper"
+                          style={{ borderColor: "var(--color-micro)" }}
+                        >
+                          ✓ In library
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => addToLibrary(g.id)}
+                          className="font-display rounded-lg px-4 py-2 text-sm font-bold uppercase tracking-wider text-ink transition hover:brightness-110"
+                          style={{ background: "var(--color-macro)" }}
+                        >
+                          + Library
+                        </button>
+                      ))}
+                  </>
+                }
+              />
+            </div>
           )}
 
           {/* Your style */}
@@ -371,13 +332,21 @@ export default function Home() {
             <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
               Top 50 · spotlight
             </h2>
-            <button
-              onClick={loadSpotlight}
-              title="Show three different games"
-              className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
-            >
-              ⟳
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/browse?top=1"
+                className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+              >
+                all 50 →
+              </Link>
+              <button
+                onClick={loadSpotlight}
+                title="Show three different games"
+                className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+              >
+                ⟳
+              </button>
+            </div>
           </div>
 
           {spotlight === null && (
