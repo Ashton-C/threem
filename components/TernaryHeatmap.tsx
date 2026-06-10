@@ -9,9 +9,9 @@ type Point = { micro: number; meso: number; macro: number };
 
 const N = 10; // subdivision rows -> N^2 cells
 
-// palette lerp: cyan (sparse) -> rose (dense)
-const LOW = [76, 201, 240];
-const HIGH = [255, 92, 122];
+// palette lerp: cyan (sparse) -> rose (dense), matching the neon axis colors
+const LOW = [41, 227, 255];
+const HIGH = [255, 46, 99];
 
 function ramp(t: number): string {
   const c = LOW.map((l, i) => Math.round(l + (HIGH[i] - l) * t));

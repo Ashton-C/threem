@@ -1,23 +1,59 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #0b0e13;
-  --color-panel: #131823;
-  --color-edge: #232b3a;
-  --color-fog: #8c96a8;
-  --color-paper: #e8ecf4;
-  --color-micro: #ff5c7a;
-  --color-meso: #ffb454;
-  --color-macro: #4cc9f0;
+  --color-ink: #06080d;
+  --color-ink2: #0a0e16;
+  --color-panel: #0e131e;
+  --color-edge: #1d2740;
+  --color-fog: #7e8aa6;
+  --color-paper: #eef2fb;
+  --color-micro: #ff2e63;
+  --color-meso: #ffc23d;
+  --color-macro: #29e3ff;
+
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
   background-color: var(--color-ink);
   color: var(--color-paper);
+  /* subtle arcade grid + radial glow */
+  background-image:
+    radial-gradient(900px circle at 50% -10%, rgba(41, 227, 255, 0.08), transparent 60%),
+    linear-gradient(rgba(29, 39, 64, 0.25) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29, 39, 64, 0.25) 1px, transparent 1px);
+  background-size: 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* neon glow helpers — driven by a per-element --glow color */
+.glow-text {
+  text-shadow: 0 0 12px var(--glow, currentColor);
+}
+.glow-box {
+  box-shadow: 0 0 0 1px var(--glow, var(--color-edge)),
+    0 0 24px -6px var(--glow, transparent);
 }
 
 @keyframes bar-grow {
-  from {
-    transform: scaleX(0);
-  }
+  from { transform: scaleX(0); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.pop-in { animation: pop-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }

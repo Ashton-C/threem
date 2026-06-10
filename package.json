@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "test:scoring": "node --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",

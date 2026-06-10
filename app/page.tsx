@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
+import ScoreBar from "@/components/ScoreBar";
 
 type Game = {
   id: string;
@@ -38,9 +39,9 @@ type SpotlightGame = {
 };
 
 const AXES = [
-  { key: "micro", label: "Micro", color: "var(--color-micro)", desc: "moment-to-moment execution" },
-  { key: "meso", label: "Meso", color: "var(--color-meso)", desc: "mid-term tactics" },
-  { key: "macro", label: "Macro", color: "var(--color-macro)", desc: "long-term strategy" },
+  { key: "micro", label: "Micro", color: "var(--color-micro)", desc: "moment-to-moment execution — aim, reactions, combos" },
+  { key: "meso", label: "Meso", color: "var(--color-meso)", desc: "mid-term tactics — reads, cooldowns, engages" },
+  { key: "macro", label: "Macro", color: "var(--color-macro)", desc: "long-term strategy — economy, map, build order" },
 ] as const;
 
 const SUGGESTIONS = ["Counter-Strike 2", "Civilization VI", "Dota 2", "Stardew Valley"];
@@ -55,44 +56,6 @@ export default function Home() {
   const [library, setLibrary] = useState<Game[] | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadLibrary = useCallback(async () => {
-    try {
-      const res = await fetch("/api/library");
-      if (!res.ok) {
-        setLibrary(null);
-        return;
-      }
-      const data = await res.json();
-      setLibrary(data.games ?? []);
-    } catch {
-      setLibrary(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) loadLibrary();
-    else setLibrary(null);
-  }, [user, loadLibrary]);
-
-  async function addToLibrary(gameId: string) {
-    await fetch("/api/library", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ game_id: gameId }),
-    });
-    loadLibrary();
-  }
-
-  async function removeFromLibrary(gameId: string) {
-    await fetch(`/api/library?game_id=${encodeURIComponent(gameId)}`, {
-      method: "DELETE",
-    });
-    loadLibrary();
-  }
-
-  const inLibrary = (gameId: string) =>
-    library?.some((g) => g.id === gameId) ?? false;
-
   const loadSpotlight = useCallback(async () => {
     try {
       const res = await fetch("/api/spotlight");
@@ -103,9 +66,22 @@ export default function Home() {
     }
   }, []);
 
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/library");
+      if (!res.ok) return setLibrary(null);
+      const data = await res.json();
+      setLibrary(data.games ?? []);
+    } catch {
+      setLibrary(null);
+    }
+  }, []);
+
+  useEffect(() => { loadSpotlight(); }, [loadSpotlight]);
   useEffect(() => {
-    loadSpotlight();
-  }, [loadSpotlight]);
+    if (user) loadLibrary();
+    else setLibrary(null);
+  }, [user, loadLibrary]);
 
   async function search(q?: string) {
     const query = (q ?? input).trim();
@@ -130,10 +106,7 @@ export default function Home() {
   function onInputChange(value: string) {
     setInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length < 2) {
-      setMatches([]);
-      return;
-    }
+    if (value.trim().length < 2) return setMatches([]);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/suggest?q=${encodeURIComponent(value.trim())}`);
@@ -145,103 +118,48 @@ export default function Home() {
     }, 200);
   }
 
+  async function addToLibrary(gameId: string) {
+    await fetch("/api/library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game_id: gameId }),
+    });
+    loadLibrary();
+  }
+  async function removeFromLibrary(gameId: string) {
+    await fetch(`/api/library?game_id=${encodeURIComponent(gameId)}`, { method: "DELETE" });
+    loadLibrary();
+  }
+  const inLibrary = (gameId: string) => library?.some((g) => g.id === gameId) ?? false;
+
   const g = result?.game;
+  const showLanding = !result && !loading;
+
   return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
-      <header className="mb-10 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-black tracking-tight">
-            3M<span className="text-fog">.</span>
-          </h1>
-          <p className="mt-1 text-sm text-fog">
-            <span style={{ color: "var(--color-micro)" }}>micro</span>
-            {" · "}
-            <span style={{ color: "var(--color-meso)" }}>meso</span>
-            {" · "}
-            <span style={{ color: "var(--color-macro)" }}>macro</span>
-            {" — what kind of skill does a game actually ask of you?"}
-          </p>
-        </div>
+    <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
+      {/* ── Header ───────────────────────────── */}
+      <header className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <button onClick={() => { setResult(null); setInput(""); }} className="group flex items-baseline gap-2">
+          <span className="font-display text-3xl font-bold tracking-tight glow-text" style={{ ["--glow" as string]: "var(--color-macro)" }}>
+            3M
+          </span>
+          <span className="flex gap-1">
+            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-micro)" }} />
+            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-meso)" }} />
+            <i className="h-2 w-5 rounded-full" style={{ background: "var(--color-macro)" }} />
+          </span>
+        </button>
         <AuthPanel onUser={setUser} />
       </header>
 
-      <div className="grid gap-12 lg:grid-cols-[280px_1fr]">
-        {/* ── Top-50 spotlight ───────────────────────────── */}
-        <aside className="order-last lg:order-first">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-fog">
-              Top 50 spotlight
-            </h2>
-            <button
-              onClick={loadSpotlight}
-              title="Show three different games"
-              className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-fog hover:text-paper"
-            >
-              shuffle
-            </button>
-          </div>
-
-          {spotlight === null && (
-            <div className="space-y-4">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-24 animate-pulse rounded-xl bg-panel" />
-              ))}
-            </div>
-          )}
-
-          {spotlight?.length === 0 && (
-            <p className="text-xs leading-relaxed text-fog/70">
-              Nothing here yet — the top-50 hasn&apos;t been seeded
-              (<code className="text-fog">npm run seed:top50</code>).
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {spotlight?.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => search(s.name)}
-                className="block w-full overflow-hidden rounded-xl border border-edge bg-panel text-left transition hover:border-fog"
-              >
-                {s.thumbnail && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={s.thumbnail} alt="" className="h-20 w-full object-cover" />
-                )}
-                <div className="p-3">
-                  <p className="mb-2 truncate text-sm font-semibold">
-                    {s.name}
-                    {s.release_year && (
-                      <span className="ml-1.5 text-xs font-normal text-fog">{s.release_year}</span>
-                    )}
-                  </p>
-                  <div className="space-y-1">
-                    {AXES.map((a) => (
-                      <div key={a.key} className="flex items-center gap-2">
-                        <span className="w-1 text-[10px] text-fog">{a.label[0]}</span>
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-edge">
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${s[a.key] * 10}%`, backgroundColor: a.color }}
-                          />
-                        </div>
-                        <span className="w-4 text-right font-mono text-[10px] tabular-nums text-fog">
-                          {s[a.key]}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        {/* ── Search + result ────────────────────────────── */}
-        <section>
+      <div className="grid gap-12 lg:grid-cols-[1fr_280px]">
+        {/* ── Main column ──────────────────────── */}
+        <section className="order-first">
+          {/* Search */}
           <div className="relative">
-            <div className="flex gap-2">
+            <div className="glow-box flex gap-2 rounded-xl bg-panel p-2" style={{ ["--glow" as string]: "var(--color-macro)" }}>
               <input
-                className="flex-1 rounded-lg border border-edge bg-panel px-4 py-3 text-paper placeholder-fog outline-none transition focus:border-fog"
+                className="flex-1 bg-transparent px-3 py-2.5 text-lg text-paper placeholder-fog outline-none"
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && search()}
@@ -252,14 +170,15 @@ export default function Home() {
               <button
                 onClick={() => search()}
                 disabled={loading}
-                className="rounded-lg bg-paper px-5 font-semibold text-ink transition hover:opacity-85 disabled:opacity-40"
+                className="font-display rounded-lg bg-macro px-6 font-bold uppercase tracking-wider text-ink transition hover:brightness-110 disabled:opacity-40"
+                style={{ background: "var(--color-macro)" }}
               >
-                {loading ? "…" : "Score"}
+                {loading ? "···" : "Score"}
               </button>
             </div>
 
             {matches.length > 0 && (
-              <ul className="absolute z-10 mt-2 w-full overflow-hidden rounded-lg border border-edge bg-panel shadow-xl">
+              <ul className="glow-box absolute z-10 mt-2 w-full overflow-hidden rounded-xl bg-panel" style={{ ["--glow" as string]: "var(--color-edge)" }}>
                 {matches.map((m) => (
                   <li key={m}>
                     <button
@@ -274,67 +193,99 @@ export default function Home() {
             )}
           </div>
 
-          {!result && !loading && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => search(s)}
-                  className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-fog hover:text-paper"
-                >
-                  {s}
-                </button>
-              ))}
+          {/* Landing / empty state */}
+          {showLanding && (
+            <div className="pop-in mt-10">
+              <h1 className="font-display text-3xl font-bold leading-tight sm:text-4xl">
+                What kind of skill does a game{" "}
+                <span className="whitespace-nowrap">actually ask of you?</span>
+              </h1>
+              <p className="mt-3 max-w-lg text-fog">
+                Every game is three skills at once. Type one and get it scored
+                0–10 on each axis, judged against fixed anchors.
+              </p>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                {AXES.map((a) => (
+                  <div
+                    key={a.key}
+                    className="glow-box rounded-xl bg-panel p-4"
+                    style={{ ["--glow" as string]: a.color }}
+                  >
+                    <div className="font-display text-lg font-bold glow-text" style={{ color: a.color, ["--glow" as string]: a.color }}>
+                      {a.label}
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-fog">{a.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8">
+                <p className="mb-2 text-xs uppercase tracking-widest text-fog">Try one</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => search(s)}
+                      className="rounded-full border border-edge px-3 py-1.5 text-sm text-fog transition hover:border-macro hover:text-paper"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
+          {/* Loading skeleton */}
           {loading && (
-            <div className="mt-10 space-y-6">
+            <div className="mt-10 space-y-7">
               {AXES.map((a) => (
                 <div key={a.key} className="animate-pulse">
-                  <div className="mb-2 h-3 w-16 rounded bg-edge" />
-                  <div className="h-2 rounded bg-edge" />
+                  <div className="mb-2 h-4 w-20 rounded bg-edge" />
+                  <div className="h-3 rounded-full bg-edge" />
                 </div>
               ))}
             </div>
           )}
 
           {result?.recognized === false && (
-            <p className="mt-10 text-fog">
+            <p className="pop-in mt-10 text-lg text-fog">
               Couldn&apos;t identify that game. Typo, or something very obscure?
             </p>
           )}
-
           {result?.error && (
-            <p className="mt-10 text-micro">Something went wrong: {result.error}</p>
+            <p className="pop-in mt-10 text-lg" style={{ color: "var(--color-micro)" }}>
+              Something went wrong: {result.error}
+            </p>
           )}
 
+          {/* Game card */}
           {g && (
-            <article className="mt-8 overflow-hidden rounded-2xl border border-edge bg-panel">
+            <article
+              className="pop-in glow-box mt-8 overflow-hidden rounded-2xl bg-panel"
+              style={{ ["--glow" as string]: "var(--color-macro)" }}
+            >
               {g.thumbnail && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={g.thumbnail} alt={g.name} className="max-h-44 w-full object-cover" />
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.thumbnail} alt={g.name} className="max-h-52 w-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
+                </div>
               )}
 
-              <div className="p-6">
-                <div className="mb-1 flex items-baseline justify-between gap-3">
-                  <h2 className="text-2xl font-bold">{g.name}</h2>
-                  <div className="flex shrink-0 gap-2">
-                    {g.confidence && (
-                      <span className="rounded-full border border-edge px-2 py-0.5 text-[11px] uppercase tracking-wider text-fog">
-                        {g.confidence}
-                      </span>
-                    )}
-                    {result?.cached && (
-                      <span className="rounded-full border border-edge px-2 py-0.5 text-[11px] uppercase tracking-wider text-fog">
-                        cached
-                      </span>
-                    )}
-                  </div>
+              <div className="p-6 sm:p-7">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h2 className="font-display text-3xl font-bold">{g.name}</h2>
+                  {result?.cached && (
+                    <span className="rounded-full border border-edge px-2 py-0.5 text-[11px] uppercase tracking-wider text-fog">
+                      cached · instant
+                    </span>
+                  )}
                 </div>
 
                 {(g.release_year || g.publisher) && (
-                  <p className="text-sm text-fog">
+                  <p className="mt-1 text-sm text-fog">
                     {[g.release_year, g.publisher].filter(Boolean).join(" · ")}
                   </p>
                 )}
@@ -342,46 +293,25 @@ export default function Home() {
                 {(g.genre || g.subgenres?.length) && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {g.genre && (
-                      <span className="rounded-full bg-edge px-2.5 py-0.5 text-xs font-medium">
-                        {g.genre}
-                      </span>
+                      <span className="rounded-full bg-edge px-2.5 py-0.5 text-xs font-semibold">{g.genre}</span>
                     )}
                     {g.subgenres?.map((sg) => (
-                      <span
-                        key={sg}
-                        className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog"
-                      >
-                        {sg}
-                      </span>
+                      <span key={sg} className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog">{sg}</span>
                     ))}
                   </div>
                 )}
 
-                <div className="mt-7 space-y-7">
+                <div className="mt-7 space-y-6">
                   {AXES.map((a, i) => (
-                    <div key={a.key}>
-                      <div className="mb-1.5 flex items-baseline justify-between">
-                        <span className="font-semibold" style={{ color: a.color }}>
-                          {a.label}
-                          <span className="ml-2 text-xs font-normal text-fog">{a.desc}</span>
-                        </span>
-                        <span className="font-mono text-lg font-bold tabular-nums">
-                          {g[a.key]}
-                          <span className="text-xs font-normal text-fog">/10</span>
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-edge">
-                        <div
-                          className="h-full origin-left rounded-full"
-                          style={{
-                            width: `${g[a.key] * 10}%`,
-                            backgroundColor: a.color,
-                            animation: `bar-grow 0.7s ${i * 0.12}s cubic-bezier(0.22,1,0.36,1) backwards`,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-2 text-sm leading-relaxed text-fog">{g.reasoning[a.key]}</p>
-                    </div>
+                    <ScoreBar
+                      key={a.key}
+                      label={a.label}
+                      desc={a.desc}
+                      score={g[a.key]}
+                      color={a.color}
+                      delay={i * 0.12}
+                      reason={g.reasoning[a.key]}
+                    />
                   ))}
                 </div>
 
@@ -391,7 +321,7 @@ export default function Home() {
                       href={g.steam_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-paper transition hover:border-fog"
+                      className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold transition hover:border-macro hover:text-paper"
                     >
                       View on Steam ↗
                     </a>
@@ -400,14 +330,16 @@ export default function Home() {
                     (inLibrary(g.id) ? (
                       <button
                         onClick={() => removeFromLibrary(g.id)}
-                        className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-fog transition hover:border-micro hover:text-micro"
+                        className="rounded-lg border border-edge px-4 py-2 text-sm font-semibold text-fog transition hover:text-paper"
+                        style={{ borderColor: "var(--color-micro)" }}
                       >
                         ✓ In library
                       </button>
                     ) : (
                       <button
                         onClick={() => addToLibrary(g.id)}
-                        className="rounded-lg bg-paper px-4 py-2 text-sm font-semibold text-ink transition hover:opacity-85"
+                        className="font-display rounded-lg px-4 py-2 text-sm font-bold uppercase tracking-wider text-ink transition hover:brightness-110"
+                        style={{ background: "var(--color-macro)" }}
                       >
                         + Library
                       </button>
@@ -417,20 +349,83 @@ export default function Home() {
             </article>
           )}
 
+          {/* Your style */}
           {user && library !== null && (
             <section className="mt-14">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-fog">
+              <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
                 Your style
               </h2>
               <StylePanel games={library} onRemove={removeFromLibrary} />
             </section>
           )}
 
-          <footer className="mt-16 text-xs text-fog/60">
+          <footer className="mt-16 text-xs leading-relaxed text-fog/60">
             Scores are LLM-judged against fixed anchors and cached — the first
             search of a game does the thinking, every search after is instant.
           </footer>
         </section>
+
+        {/* ── Spotlight sidebar ────────────────── */}
+        <aside className="order-last">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
+              Top 50 · spotlight
+            </h2>
+            <button
+              onClick={loadSpotlight}
+              title="Show three different games"
+              className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+            >
+              ⟳
+            </button>
+          </div>
+
+          {spotlight === null && (
+            <div className="space-y-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-28 animate-pulse rounded-xl bg-panel" />
+              ))}
+            </div>
+          )}
+
+          {spotlight?.length === 0 && (
+            <p className="text-xs leading-relaxed text-fog/70">
+              Nothing here yet — run <code className="text-fog">npm run seed:top50</code>.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            {spotlight?.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => search(s.name)}
+                className="group block w-full overflow-hidden rounded-xl border border-edge bg-panel text-left transition hover:border-macro"
+              >
+                {s.thumbnail && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={s.thumbnail} alt="" className="h-20 w-full object-cover transition group-hover:brightness-110" />
+                )}
+                <div className="p-3">
+                  <p className="mb-2 truncate text-sm font-semibold">
+                    {s.name}
+                    {s.release_year && <span className="ml-1.5 text-xs font-normal text-fog">{s.release_year}</span>}
+                  </p>
+                  <div className="space-y-1">
+                    {AXES.map((a) => (
+                      <div key={a.key} className="flex items-center gap-2">
+                        <span className="w-2 font-display text-[10px] font-bold" style={{ color: a.color }}>{a.label[0]}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-edge">
+                          <div className="h-full rounded-full" style={{ width: `${s[a.key] * 10}%`, background: a.color, boxShadow: `0 0 8px ${a.color}` }} />
+                        </div>
+                        <span className="w-4 text-right font-mono text-[10px] tabular-nums text-fog">{s[a.key]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
       </div>
     </main>
   );
