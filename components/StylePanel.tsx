@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import TernaryHeatmap from "./TernaryHeatmap";
+import ShareStyle from "./ShareStyle";
+import { archetype, encodeStyle } from "@/lib/archetype";
 
 type LibGame = {
   id: string;
@@ -18,22 +20,6 @@ const AXES = [
   { key: "meso", label: "Meso", color: "var(--color-meso)" },
   { key: "macro", label: "Macro", color: "var(--color-macro)" },
 ] as const;
-
-function archetype(avg: Record<"micro" | "meso" | "macro", number>): {
-  name: string;
-  color: string;
-} {
-  const entries = Object.entries(avg) as ["micro" | "meso" | "macro", number][];
-  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
-  if (sorted[0][1] - sorted[2][1] < 1)
-    return { name: "Hybrid", color: "var(--color-paper)" };
-  const meta = {
-    micro: { name: "Executor", color: "var(--color-micro)" },
-    meso: { name: "Tactician", color: "var(--color-meso)" },
-    macro: { name: "Strategist", color: "var(--color-macro)" },
-  };
-  return meta[sorted[0][0]];
-}
 
 export default function StylePanel({
   games,
@@ -100,12 +86,15 @@ export default function StylePanel({
       <p className="text-sm text-fog">
         {games.length} game{games.length === 1 ? "" : "s"} · you play like a
       </p>
-      <p
-        className="font-display text-3xl font-bold glow-text"
-        style={{ color: arch.color, ["--glow" as string]: arch.color }}
-      >
-        {arch.name}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p
+          className="font-display text-3xl font-bold glow-text"
+          style={{ color: arch.color, ["--glow" as string]: arch.color }}
+        >
+          {arch.name}
+        </p>
+        <ShareStyle code={encodeStyle(avg, games.length)} />
+      </div>
 
       <div className="mt-5 grid items-center gap-6 sm:grid-cols-[1fr_180px]">
         <TernaryHeatmap points={games} />

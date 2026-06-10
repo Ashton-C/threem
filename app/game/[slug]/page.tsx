@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase";
 import GameScores, { type GameLike } from "@/components/GameScores";
 import GameGrid, { type GridRow } from "@/components/GameGrid";
 import LibraryButton from "@/components/LibraryButton";
+import ScoreFeedback from "@/components/ScoreFeedback";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,8 @@ export default async function GamePage({
           }
         />
       </div>
+
+      <ScoreFeedback gameId={g.id} />
 
       {similar.length > 0 && (
         <section className="mt-12">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
 import GameScores from "@/components/GameScores";
+import SteamImport from "@/components/SteamImport";
 
 type Game = {
   id: string;
@@ -313,9 +314,12 @@ export default function Home() {
           {/* Your style */}
           {user && library !== null && (
             <section className="mt-14">
-              <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
-                Your style
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
+                  Your style
+                </h2>
+                <SteamImport onImported={loadLibrary} />
+              </div>
               <StylePanel games={library} onRemove={removeFromLibrary} />
             </section>
           )}
