@@ -29,6 +29,7 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
   const [q, setQ] = useState("");
   const [genre, setGenre] = useState("");
   const [min, setMin] = useState({ micro: 0, meso: 0, macro: 0 });
+  const [minInt, setMinInt] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("featured_rank");
   const [dir, setDir] = useState<1 | -1>(1);
 
@@ -49,7 +50,8 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
       (r) =>
         (!ql || r.name.toLowerCase().includes(ql) || (r.genre ?? "").toLowerCase().includes(ql)) &&
         (!genre || r.genre === genre) &&
-        r.micro >= min.micro && r.meso >= min.meso && r.macro >= min.macro
+        r.micro >= min.micro && r.meso >= min.meso && r.macro >= min.macro &&
+        intensity(r) >= minInt
     );
     return [...filtered].sort((a, b) => {
       const av = val(a, sortKey), bv = val(b, sortKey);
@@ -58,7 +60,7 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
       return a.name.localeCompare(b.name);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, genre, min, sortKey, dir]);
+  }, [rows, q, genre, min, minInt, sortKey, dir]);
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setDir((d) => (d === 1 ? -1 : 1));
@@ -101,6 +103,17 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
             />
           </label>
         ))}
+        <label className="flex items-center gap-1 text-xs text-paper">
+          intensity ≥
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={minInt || ""}
+            onChange={(e) => setMinInt(Math.min(10, Math.max(0, Number(e.target.value) || 0)))}
+            className="w-12 rounded border border-edge bg-panel px-1.5 py-1 text-paper outline-none focus:border-macro"
+          />
+        </label>
         <span className="text-xs text-fog">{view_rows.length} games</span>
         <div className="ml-auto inline-flex rounded-lg border border-edge p-0.5 text-xs">
           {(["table", "grid"] as const).map((v) => (

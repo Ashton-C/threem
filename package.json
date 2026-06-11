@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:scoring": "node --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",
-    "seed:top50": "node --experimental-strip-types --env-file=.env.local scripts/seed-top50.ts"
+    "test:scoring": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",
+    "seed:top50": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-top50.ts",
+    "seed:catalog": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-catalog.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

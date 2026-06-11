@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase";
 import { computeStats } from "@/lib/stats";
 import { ARCHETYPES } from "@/lib/archetype";
 import { intensity, intensityBand } from "@/lib/intensity";
+import ScatterPlot from "@/components/ScatterPlot";
 
 const ARCH_HEX = Object.fromEntries(ARCHETYPES.map((a) => [a.name, a.hex]));
 
@@ -19,6 +20,9 @@ const AXES = [
 export default async function StatsPage() {
   const { data } = await db.from("games").select("micro,meso,macro,genre");
   const s = computeStats(data ?? []);
+  const { data: scatter } = await db
+    .from("games")
+    .select("id,slug,name,micro,meso,macro");
   const archTotal = s.archetypes.reduce((a, b) => a + b.count, 0) || 1;
   const maxGenre = s.genres[0]?.count ?? 1;
 
@@ -47,6 +51,17 @@ export default async function StatsPage() {
           </div>
         ))}
       </div>
+
+      {/* scatter explorer */}
+      {scatter && scatter.length > 0 && (
+        <>
+          <h2 className="font-display mt-12 text-xs font-bold uppercase tracking-[0.2em] text-fog">
+            Explore the field
+          </h2>
+          <p className="mb-4 mt-1 text-sm text-fog">Plot the whole catalog on any two axes.</p>
+          <ScatterPlot points={scatter} />
+        </>
+      )}
 
       {/* distributions */}
       <h2 className="font-display mt-12 text-xs font-bold uppercase tracking-[0.2em] text-fog">

@@ -9,28 +9,37 @@ import ScoreFeedback from "@/components/ScoreFeedback";
 
 export const dynamic = "force-dynamic";
 
-// nearest neighbours in 3M space (Euclidean on micro/meso/macro)
-async function similarGames(game: {
+type CatGame = {
   id: string;
+  slug: string;
+  name: string;
   micro: number;
   meso: number;
   macro: number;
-}): Promise<GridRow[]> {
-  const { data } = await db
-    .from("games")
-    .select("id,slug,name,micro,meso,macro,thumbnail,release_year,featured_rank");
-  return (data ?? [])
+  thumbnail: string | null;
+  release_year: number | null;
+  featured_rank: number | null;
+};
+
+// nearest neighbours in 3M space (Euclidean on micro/meso/macro)
+function similarGames(all: CatGame[], game: { id: string; micro: number; meso: number; macro: number }): GridRow[] {
+  return all
     .filter((g) => g.id !== game.id)
     .map((g) => ({
       g,
-      d:
-        (g.micro - game.micro) ** 2 +
-        (g.meso - game.meso) ** 2 +
-        (g.macro - game.macro) ** 2,
+      d: (g.micro - game.micro) ** 2 + (g.meso - game.meso) ** 2 + (g.macro - game.macro) ** 2,
     }))
     .sort((a, b) => a.d - b.d)
     .slice(0, 6)
     .map((x) => x.g as GridRow);
+}
+
+// % of the catalog this game scores at least as high as, per axis
+function percentiles(all: CatGame[], game: { micro: number; meso: number; macro: number }) {
+  const n = all.length || 1;
+  const pct = (ax: "micro" | "meso" | "macro") =>
+    Math.round((all.filter((g) => game[ax] >= g[ax]).length / n) * 100);
+  return { micro: pct("micro"), meso: pct("meso"), macro: pct("macro") };
 }
 
 export async function generateMetadata({
@@ -57,7 +66,13 @@ export default async function GamePage({
 
   if (!game) notFound();
   const g = game as GameLike & { id: string; slug: string; steam_url?: string | null };
-  const similar = await similarGames(g);
+
+  const { data: allData } = await db
+    .from("games")
+    .select("id,slug,name,micro,meso,macro,thumbnail,release_year,featured_rank");
+  const all = (allData ?? []) as CatGame[];
+  const similar = similarGames(all, g);
+  const pct = percentiles(all, g);
 
   // known spellings that resolve to this game — helps users confirm the match
   const { data: aliasRows } = await db
@@ -100,8 +115,15 @@ export default async function GamePage({
             }
           />
 
+          <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fog">
+            <span>More <span style={{ color: "var(--color-micro)" }}>Micro</span> than <span className="font-mono text-paper">{pct.micro}%</span></span>
+            <span>· more <span style={{ color: "var(--color-meso)" }}>Meso</span> than <span className="font-mono text-paper">{pct.meso}%</span></span>
+            <span>· more <span style={{ color: "var(--color-macro)" }}>Macro</span> than <span className="font-mono text-paper">{pct.macro}%</span></span>
+            <span className="text-fog/60">of {all.length} games</span>
+          </p>
+
           {aliases.length > 0 && (
-            <p className="mt-3 text-xs text-fog/70">
+            <p className="mt-2 text-xs text-fog/70">
               Also matched from: {aliases.slice(0, 8).join(", ")}
             </p>
           )}
