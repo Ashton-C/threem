@@ -1,7 +1,7 @@
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import { db } from "@/lib/supabase";
-import GameGrid, { type GridRow } from "@/components/GameGrid";
+import CatalogView, { type CatalogRow } from "@/components/CatalogView";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +74,7 @@ export default async function BrowsePage({
   }
 
   const { data } = await q;
-  const rows = (data ?? []) as GridRow[];
+  const rows = (data ?? []) as CatalogRow[];
   const activeRanges = ranges.filter((r) => r.min != null || r.max != null);
   const isDefault = !sort && !top && !publisher && !genre && activeRanges.length === 0;
 
@@ -161,13 +161,9 @@ export default async function BrowsePage({
         </div>
       )}
 
-      {rows.length === 0 ? (
-        <p className="mt-10 text-fog">No games match.</p>
-      ) : (
-        <div className="mt-8">
-          <GameGrid rows={rows} />
-        </div>
-      )}
+      <div className="mt-8">
+        <CatalogView rows={rows} />
+      </div>
     </main>
   );
 }
