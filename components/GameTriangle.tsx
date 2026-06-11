@@ -1,18 +1,19 @@
 "use client";
+import { useId } from "react";
 
 // Single-game radar: each axis runs from the center (0) out to its vertex
 // (10); the score plots along its own axis and the three points connect
-// into a filled polygon. Bigger triangle = more demanding game.
+// into a filled polygon. The fill is layered radial gradients that deepen
+// the interior toward the heaviest-weighted axis.
 
 type Scores = { micro: number; meso: number; macro: number };
 
 const AXES = [
-  { key: "micro", label: "Micro", color: "#ff2e63", ang: -90 }, // top
-  { key: "meso", label: "Meso", color: "#ffc23d", ang: 30 }, // bottom-right
-  { key: "macro", label: "Macro", color: "#29e3ff", ang: 150 }, // bottom-left
+  { key: "micro", label: "Micro", color: "#ff2e63", rgb: "255,46,99", ang: -90 }, // top
+  { key: "meso", label: "Meso", color: "#ffc23d", rgb: "255,194,61", ang: 30 }, // bottom-right
+  { key: "macro", label: "Macro", color: "#29e3ff", rgb: "41,227,255", ang: 150 }, // bottom-left
 ] as const;
 
-const FILL = "#29e3ff"; // polygon accent (cyan)
 const rad = (d: number) => (d * Math.PI) / 180;
 
 export default function GameTriangle({
@@ -22,6 +23,7 @@ export default function GameTriangle({
   game: Scores;
   size?: number;
 }) {
+  const uid = useId().replace(/:/g, "");
   const cx = size / 2;
   const cy = size * 0.5;
   const R = size * 0.32;
@@ -34,6 +36,12 @@ export default function GameTriangle({
 
   const grid = [2, 4, 6, 8, 10];
   const scorePts = AXES.map((a) => at(a.ang, R * (game[a.key] / 10)));
+  const scorePolygon = scorePts.map((p) => p.join(",")).join(" ");
+
+  // normalized axis shares -> gradient lean toward the heaviest
+  const sum = game.micro + game.meso + game.macro || 1;
+  const share = { micro: game.micro / sum, meso: game.meso / sum, macro: game.macro / sum };
+  const reach = R * 1.9;
 
   return (
     <svg
@@ -43,6 +51,19 @@ export default function GameTriangle({
       role="img"
       aria-label="Radar of this game's micro/meso/macro scores"
     >
+      <defs>
+        {AXES.map((a) => {
+          const [vx, vy] = at(a.ang, R);
+          const o = (0.2 + 0.85 * share[a.key]).toFixed(3);
+          return (
+            <radialGradient key={a.key} id={`${uid}-${a.key}`} gradientUnits="userSpaceOnUse" cx={vx} cy={vy} r={reach}>
+              <stop offset="0%" stopColor={`rgba(${a.rgb},${o})`} />
+              <stop offset="75%" stopColor={`rgba(${a.rgb},0)`} />
+            </radialGradient>
+          );
+        })}
+      </defs>
+
       {/* concentric grid rings */}
       {grid.map((L) => (
         <polygon
@@ -72,15 +93,18 @@ export default function GameTriangle({
         );
       })}
 
-      {/* the game's score polygon */}
+      {/* score polygon, filled with layered axis gradients (deeper toward heaviest) */}
+      <polygon points={scorePolygon} fill="var(--color-ink2)" fillOpacity={0.5} />
+      {AXES.map((a) => (
+        <polygon key={a.key} points={scorePolygon} fill={`url(#${uid}-${a.key})`} />
+      ))}
       <polygon
-        points={scorePts.map((p) => p.join(",")).join(" ")}
-        fill={FILL}
-        fillOpacity={0.16}
-        stroke={FILL}
+        points={scorePolygon}
+        fill="none"
+        stroke="#29e3ff"
         strokeWidth={2}
         strokeLinejoin="round"
-        style={{ filter: `drop-shadow(0 0 5px ${FILL})` }}
+        style={{ filter: "drop-shadow(0 0 5px #29e3ff)" }}
       />
 
       {/* score dots, colored per axis */}
