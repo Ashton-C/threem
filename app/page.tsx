@@ -65,6 +65,7 @@ export default function Home() {
   } | null>(null);
   const [steamReturn, setSteamReturn] = useState<string | null>(null);
   const [steamError, setSteamError] = useState(false);
+  const [searchedTerm, setSearchedTerm] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadSpotlight = useCallback(async () => {
@@ -111,10 +112,11 @@ export default function Home() {
     else setLibrary(null);
   }, [user, loadLibrary]);
 
-  async function search(q?: string) {
+  async function search(q?: string, force = false) {
     const query = (q ?? input).trim();
     if (!query || loading) return;
     if (q) setInput(q);
+    setSearchedTerm(query);
     setMatches([]);
     setLoading(true);
     setResult(null);
@@ -122,7 +124,7 @@ export default function Home() {
       const res = await fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: query }),
+        body: JSON.stringify({ input: query, force }),
       });
       setResult(await res.json());
     } catch {
@@ -318,6 +320,18 @@ export default function Home() {
           {/* Game card */}
           {g && (
             <div className="pop-in mt-8">
+              {searchedTerm && g.name.toLowerCase() !== searchedTerm.toLowerCase() && (
+                <p className="mb-2 text-sm text-fog">
+                  Matched <span className="text-paper">“{searchedTerm}”</span> →{" "}
+                  <span className="text-paper">{g.name}</span>.{" "}
+                  <button
+                    onClick={() => search(searchedTerm, true)}
+                    className="underline underline-offset-2 transition hover:text-paper"
+                  >
+                    Wrong game? Re-score
+                  </button>
+                </p>
+              )}
               <GameScores
                 game={g}
                 cached={result?.cached}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ScoreBar from "./ScoreBar";
 import GameTriangle from "./GameTriangle";
+import IntensityMeter from "./IntensityMeter";
 
 export type GameLike = {
   id: string;
@@ -112,6 +113,9 @@ export default function GameScores({
           <div className="mx-auto w-full max-w-[220px] sm:w-[200px]">
             <GameTriangle game={game} size={200} />
             <p className="mt-1 text-center text-[11px] text-fog/70">balance across the three axes</p>
+            <div className="mt-4">
+              <IntensityMeter game={game} />
+            </div>
           </div>
         </div>
 

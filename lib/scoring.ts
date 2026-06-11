@@ -20,7 +20,10 @@ Macro 9-10: Civilization, Age of Empires, StarCraft II, Factorio. Macro 5-6: Hea
 RULES:
 1. Write the reason BEFORE the number.
 2. Unrecognized game OR non-game input -> "recognized": false, no guessed scores.
-3. "game" must be the most widely used short title: drop creator/brand prefixes ("Sid Meier's", "Tom Clancy's") and trademark symbols.
+3. "game" is the canonical title. Apply in order:
+   a. Drop creator/publisher prefixes ("Sid Meier's", "Tom Clancy's") and trademark symbols (™, ®).
+   b. KEEP sequel numbers and distinguishing subtitles. "BioShock Infinite", "Half-Life 2", "Portal 2", "Dark Souls III" are DIFFERENT games — never collapse them to the base title ("BioShock", "Half-Life", "Portal", "Dark Souls").
+   c. Remaster / Remastered / Definitive / Game of the Year / GOTY / HD / Enhanced editions are the SAME game as the original: return the ORIGINAL title and score it as the original. E.g. "Dark Souls: Remastered" -> "Dark Souls"; "The Last of Us Remastered" -> "The Last of Us"; "Skyrim Special Edition" -> "The Elder Scrolls V: Skyrim".
 4. "genre" is the single primary genre; "subgenres" are 1-3 more specific labels. "publisher" is the original publisher; "release_year" is the first release. Use null when genuinely unsure — do not guess.
 5. Output ONLY this JSON, no markdown:
 {"game":"<canonical name>","recognized":<bool>,

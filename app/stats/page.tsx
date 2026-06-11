@@ -3,6 +3,7 @@ import SiteHeader from "@/components/SiteHeader";
 import { db } from "@/lib/supabase";
 import { computeStats } from "@/lib/stats";
 import { ARCHETYPES } from "@/lib/archetype";
+import { intensity, intensityBand } from "@/lib/intensity";
 
 const ARCH_HEX = Object.fromEntries(ARCHETYPES.map((a) => [a.name, a.hex]));
 
@@ -28,7 +29,9 @@ export default async function StatsPage() {
       <h1 className="font-display text-3xl font-bold">The dataset</h1>
       <p className="mt-1 text-fog">
         <span className="font-mono text-paper">{s.total}</span> games scored and
-        counting — every search adds to it.
+        counting — every search adds to it. Average intensity:{" "}
+        <span className="text-paper">{intensityBand(intensity(s.avg))}</span>{" "}
+        <span className="font-mono text-fog">({intensity(s.avg).toFixed(1)})</span>.
       </p>
 
       {/* axis averages */}

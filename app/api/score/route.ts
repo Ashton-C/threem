@@ -6,7 +6,7 @@ import { lookupCachedGame, scoreAndCache } from "@/lib/resolve";
 const MAX_INPUT = 100; // real game names are short; caps token cost per call
 
 export async function POST(req: NextRequest) {
-  const { input } = await req.json();
+  const { input, force } = await req.json();
   if (!input || typeof input !== "string")
     return NextResponse.json({ error: "no input" }, { status: 400 });
   if (input.length > MAX_INPUT)
@@ -16,10 +16,14 @@ export async function POST(req: NextRequest) {
   if (!rawSlug)
     return NextResponse.json({ error: "no input" }, { status: 400 });
 
-  // 1. cache lookup via alias — free, happens before any rate limiting
-  const cached = await lookupCachedGame(rawSlug);
-  if (cached)
-    return NextResponse.json({ recognized: true, game: cached, cached: true });
+  // 1. cache lookup via alias — free, happens before any rate limiting.
+  //    `force` (a "wrong game? re-score" action) bypasses it so the spelling
+  //    is re-resolved with the current prompt and its alias overwritten.
+  if (!force) {
+    const cached = await lookupCachedGame(rawSlug);
+    if (cached)
+      return NextResponse.json({ recognized: true, game: cached, cached: true });
+  }
 
   // 2. rate limit before any LLM-billed work, keyed on the trusted platform IP
   if (!(await checkRateLimit(clientIp(req))))
