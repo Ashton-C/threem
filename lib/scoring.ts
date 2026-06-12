@@ -1,9 +1,21 @@
 // LLM scoring — single source of truth for the prompt and model config.
 // Used by app/api/score/route.ts and scripts/consistency-test.ts.
 // No Next.js or DB imports here so it can run standalone under plain node.
+import { ANCHORS } from "./anchors.ts";
 
-export const GEMINI_MODEL = "gemini-3.5-flash"; // best free-tier model; rubric carries the weight
+// Free-tier model. gemini-3.5-flash is billed; flash-lite is free and
+// (with the anchor rubric) calibrates well + reliably emits JSON.
+export const GEMINI_MODEL = "gemini-flash-lite-latest";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+// build the anchor block from the shared source so prompt + /about can't drift
+const anchorBlock = (["micro", "meso", "macro"] as const)
+  .map((ax) => {
+    const L = ax[0].toUpperCase() + ax.slice(1);
+    const a = ANCHORS[ax];
+    return `${L} 9-10: ${a.high.join(", ")}. ${L} 5-6: ${a.mid.join(", ")}. ${L} 1-2: ${a.low.join(", ")}.`;
+  })
+  .join("\n");
 
 export const SYSTEM = `You are a game analyst scoring video games on three axes, each 0-10.
 Score INDEPENDENTLY — a game can be high or low on all three at once.
@@ -12,10 +24,8 @@ Micro: moment-to-moment mechanical execution (aim, reaction, combos, precise con
 Meso: mid-term tactics ~30s-few min (reading opponents, cooldown tracking, engage/disengage).
 Macro: long-term strategy (economy, map control, build orders, objective pacing).
 
-ANCHORS — calibrate, do not drift:
-Micro 9-10: CS2, StarCraft II, Osu!, Street Fighter, Apex. Micro 5-6: Dark Souls, Monster Hunter. Micro 1-2: Civilization, Stardew.
-Meso 9-10: Dota 2, Poker, Magic, Rainbow Six Siege. Meso 5-6: Apex, Monster Hunter. Meso 1-2: Osu!, Stardew.
-Macro 9-10: Civilization, Age of Empires, StarCraft II, Factorio. Macro 5-6: Hearthstone, Magic. Macro 1-2: Osu!, Street Fighter.
+ANCHORS — calibrate against these, do not drift:
+${anchorBlock}
 
 RULES:
 1. Write the reason BEFORE the number.
@@ -62,7 +72,7 @@ export async function scoreGame(input: string): Promise<ScoreResult> {
       contents: [{ parts: [{ text: `GAME: ${input}` }] }],
       systemInstruction: { parts: [{ text: SYSTEM }] },
       generationConfig: {
-        temperature: 0.2, // low temp = stable scores
+        temperature: 0.1, // low temp = stable scores
         maxOutputTokens: 1500, // headroom for thinking tokens
         responseMimeType: "application/json",
         thinkingConfig: { thinkingLevel: "low" },

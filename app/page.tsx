@@ -5,6 +5,7 @@ import Link from "next/link";
 import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
 import GameScores from "@/components/GameScores";
+import GameTriangle from "@/components/GameTriangle";
 import SteamImport from "@/components/SteamImport";
 import SiteHeader from "@/components/SiteHeader";
 
@@ -180,9 +181,8 @@ export default function Home() {
         </p>
       )}
 
-      <div className="grid gap-12 lg:grid-cols-[1fr_280px]">
-        {/* ── Main column ──────────────────────── */}
-        <section className="order-first">
+      <div>
+        <section>
           {/* Search */}
           <div className="relative">
             <div className="glow-box flex gap-2 rounded-xl bg-panel p-2" style={{ ["--glow" as string]: "var(--color-macro)" }}>
@@ -291,6 +291,36 @@ export default function Home() {
                   )}
                 </div>
               )}
+
+              {/* Spotlight — three from the top 50, each with its spider graph */}
+              <div className="mt-12">
+                <div className="mb-4 flex items-center justify-center gap-3">
+                  <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
+                    Top 50 · spotlight
+                  </h2>
+                  <button
+                    onClick={loadSpotlight}
+                    title="Show three different games"
+                    className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+                  >
+                    ⟳
+                  </button>
+                </div>
+                <div className="mx-auto grid w-[70%] min-w-[280px] gap-6 sm:grid-cols-3">
+                  {spotlight === null
+                    ? [0, 1, 2].map((i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-panel" />)
+                    : spotlight.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => search(s.name)}
+                          className="group rounded-2xl border border-edge bg-panel p-3 text-center transition hover:border-macro"
+                        >
+                          <GameTriangle game={s} size={180} />
+                          <p className="mt-1 truncate text-sm font-semibold">{s.name}</p>
+                        </button>
+                      ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -397,76 +427,6 @@ export default function Home() {
             <span>· LLM-judged against fixed anchors, then cached.</span>
           </footer>
         </section>
-
-        {/* ── Spotlight sidebar ────────────────── */}
-        <aside className="order-last">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
-              Top 50 · spotlight
-            </h2>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/browse?top=1"
-                className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
-              >
-                all 50 →
-              </Link>
-              <button
-                onClick={loadSpotlight}
-                title="Show three different games"
-                className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
-              >
-                ⟳
-              </button>
-            </div>
-          </div>
-
-          {spotlight === null && (
-            <div className="space-y-4">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-28 animate-pulse rounded-xl bg-panel" />
-              ))}
-            </div>
-          )}
-
-          {spotlight?.length === 0 && (
-            <p className="text-xs leading-relaxed text-fog/70">
-              Nothing here yet — run <code className="text-fog">npm run seed:top50</code>.
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {spotlight?.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => search(s.name)}
-                className="group block w-full overflow-hidden rounded-xl border border-edge bg-panel text-left transition hover:border-macro"
-              >
-                {s.thumbnail && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={s.thumbnail} alt="" className="h-20 w-full object-cover transition group-hover:brightness-110" />
-                )}
-                <div className="p-3">
-                  <p className="mb-2 truncate text-sm font-semibold">
-                    {s.name}
-                    {s.release_year && <span className="ml-1.5 text-xs font-normal text-fog">{s.release_year}</span>}
-                  </p>
-                  <div className="space-y-1">
-                    {AXES.map((a) => (
-                      <div key={a.key} className="flex items-center gap-2">
-                        <span className="w-2 font-display text-[10px] font-bold" style={{ color: a.color }}>{a.label[0]}</span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-edge">
-                          <div className="h-full rounded-full" style={{ width: `${s[a.key] * 10}%`, background: a.color, boxShadow: `0 0 8px ${a.color}` }} />
-                        </div>
-                        <span className="w-4 text-right font-mono text-[10px] tabular-nums text-fog">{s[a.key]}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
       </div>
     </main>
   );

@@ -22,21 +22,24 @@ export const AXIS_INFO = {
   },
 } as const;
 
+// Five exemplars per band, chosen to be unambiguous and to minimise the
+// same game anchoring multiple axes (cross-references are kept only where
+// genuinely instructive, e.g. a pure-execution game being low on Macro).
 export const ANCHORS = {
   micro: {
-    high: ["CS2", "StarCraft II", "Osu!", "Street Fighter", "Apex"],
-    mid: ["Dark Souls", "Monster Hunter"],
-    low: ["Civilization", "Stardew"],
+    high: ["Counter-Strike 2", "Osu!", "Street Fighter 6", "Tetris", "Devil May Cry 5"],
+    mid: ["Dark Souls", "Hollow Knight", "Monster Hunter: World", "Hades", "Celeste"],
+    low: ["Civilization VI", "Stardew Valley", "Disco Elysium", "Football Manager", "Hearthstone"],
   },
   meso: {
-    high: ["Dota 2", "Poker", "Magic", "Rainbow Six Siege"],
-    mid: ["Apex", "Monster Hunter"],
-    low: ["Osu!", "Stardew"],
+    high: ["Dota 2", "Rainbow Six Siege", "League of Legends", "Valorant", "Magic: The Gathering"],
+    mid: ["Apex Legends", "Overwatch 2", "Sekiro: Shadows Die Twice", "Hunt: Showdown", "Teamfight Tactics"],
+    low: ["Vampire Survivors", "Subway Surfers", "Cookie Clicker", "Animal Crossing: New Horizons", "Forza Horizon 5"],
   },
   macro: {
-    high: ["Civilization", "Age of Empires", "StarCraft II", "Factorio"],
-    mid: ["Hearthstone", "Magic"],
-    low: ["Osu!", "Street Fighter"],
+    high: ["Civilization VI", "Age of Empires IV", "Factorio", "Crusader Kings III", "StarCraft II"],
+    mid: ["Slay the Spire", "Frostpunk", "Into the Breach", "Bloons TD 6", "Northgard"],
+    low: ["Osu!", "Cuphead", "Geometry Dash", "Beat Saber", "Tetris"],
   },
 } as const;
 

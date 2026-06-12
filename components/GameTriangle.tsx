@@ -37,6 +37,12 @@ export default function GameTriangle({
   const grid = [2, 4, 6, 8, 10];
   const scorePts = AXES.map((a) => at(a.ang, R * (game[a.key] / 10)));
   const scorePolygon = scorePts.map((p) => p.join(",")).join(" ");
+  // polygon edges, each a gradient between its two axis colors (not all-cyan)
+  const edges = [
+    { from: 0, to: 1 }, // micro -> meso
+    { from: 1, to: 2 }, // meso -> macro
+    { from: 2, to: 0 }, // macro -> micro
+  ];
 
   // normalized axis shares -> gradient lean toward the heaviest
   const sum = game.micro + game.meso + game.macro || 1;
@@ -62,18 +68,28 @@ export default function GameTriangle({
             </radialGradient>
           );
         })}
+        {edges.map((e, i) => {
+          const [x1, y1] = scorePts[e.from];
+          const [x2, y2] = scorePts[e.to];
+          return (
+            <linearGradient key={i} id={`${uid}-e${i}`} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
+              <stop offset="0%" stopColor={AXES[e.from].color} />
+              <stop offset="100%" stopColor={AXES[e.to].color} />
+            </linearGradient>
+          );
+        })}
       </defs>
 
-      {/* concentric grid rings */}
+      {/* concentric grid rings; the outer ring is the 0-10 bounds */}
       {grid.map((L) => (
         <polygon
           key={L}
           points={poly(() => R * (L / 10))}
           fill="none"
-          stroke="var(--color-edge)"
-          strokeWidth={0.75}
+          stroke={L === 10 ? "var(--color-fog)" : "var(--color-edge)"}
+          strokeWidth={L === 10 ? 1.25 : 0.75}
           strokeDasharray={L === 10 ? undefined : "2 3"}
-          opacity={L === 10 ? 0.9 : 0.5}
+          opacity={L === 10 ? 0.85 : 0.45}
         />
       ))}
 
@@ -98,14 +114,24 @@ export default function GameTriangle({
       {AXES.map((a) => (
         <polygon key={a.key} points={scorePolygon} fill={`url(#${uid}-${a.key})`} />
       ))}
-      <polygon
-        points={scorePolygon}
-        fill="none"
-        stroke="#29e3ff"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        style={{ filter: "drop-shadow(0 0 5px #29e3ff)" }}
-      />
+      {/* multi-color edges — each blends its two axis colors */}
+      {edges.map((e, i) => {
+        const [x1, y1] = scorePts[e.from];
+        const [x2, y2] = scorePts[e.to];
+        return (
+          <line
+            key={i}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke={`url(#${uid}-e${i})`}
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.3))" }}
+          />
+        );
+      })}
 
       {/* score dots, colored per axis */}
       {AXES.map((a, i) => {
