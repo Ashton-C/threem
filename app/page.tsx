@@ -6,6 +6,7 @@ import AuthPanel from "@/components/AuthPanel";
 import StylePanel from "@/components/StylePanel";
 import GameScores from "@/components/GameScores";
 import GameTriangle from "@/components/GameTriangle";
+import IntensityMeter from "@/components/IntensityMeter";
 import SteamImport from "@/components/SteamImport";
 import SiteHeader from "@/components/SiteHeader";
 
@@ -318,16 +319,24 @@ export default function Home() {
                           <button
                             key={s.id}
                             onClick={() => search(s.name)}
-                            className="group glow-box flex flex-col overflow-hidden rounded-2xl bg-panel text-left transition"
+                            className="group glow-box flex flex-col overflow-hidden rounded-2xl bg-panel text-left transition hover:brightness-105"
                             style={{ ["--glow" as string]: "var(--color-edge)" }}
                           >
-                            {s.thumbnail && (
-                              <div className="relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={s.thumbnail} alt="" className="h-32 w-full object-cover transition group-hover:brightness-110" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
-                              </div>
-                            )}
+                            {/* header: real art, or a branded placeholder so every card matches */}
+                            <div className="relative h-32 w-full overflow-hidden">
+                              {s.thumbnail ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={s.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:brightness-110" />
+                              ) : (
+                                <div
+                                  className="flex h-full w-full items-center justify-center"
+                                  style={{ background: "radial-gradient(120% 100% at 50% 0%, rgba(41,227,255,0.18), var(--color-ink2) 70%)" }}
+                                >
+                                  <span className="font-display px-4 text-center text-lg font-bold text-paper/80">{s.name}</span>
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
+                            </div>
                             <div className="flex flex-1 flex-col p-4">
                               <div className="flex items-baseline justify-between gap-2">
                                 <h3 className="font-display truncate text-lg font-bold">{s.name}</h3>
@@ -340,6 +349,9 @@ export default function Home() {
                               )}
                               <div className="mt-2">
                                 <GameTriangle game={s} size={230} />
+                              </div>
+                              <div className="mt-auto px-1 pt-3">
+                                <IntensityMeter game={s} compact />
                               </div>
                             </div>
                           </button>

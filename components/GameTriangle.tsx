@@ -51,9 +51,10 @@ export default function GameTriangle({
 
   return (
     <svg
-      viewBox={`${-size * 0.16} 0 ${size * 1.32} ${size}`}
+      viewBox={`${-size * 0.16} ${size * 0.05} ${size * 1.32} ${size * 0.72}`}
       width="100%"
       style={{ maxWidth: size * 1.32 }}
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="Radar of this game's micro/meso/macro scores"
     >
