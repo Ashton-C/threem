@@ -110,8 +110,8 @@ export default function GameScores({
               />
             ))}
           </div>
-          <div className="mx-auto w-full max-w-[220px] sm:w-[200px]">
-            <GameTriangle game={game} size={200} />
+          <div className="mx-auto w-full max-w-[300px] sm:w-[250px]">
+            <GameTriangle game={game} size={250} />
             <p className="mt-1 text-center text-[11px] text-fog/70">balance across the three axes</p>
             <div className="mt-4">
               <IntensityMeter game={game} />

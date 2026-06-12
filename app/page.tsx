@@ -36,12 +36,15 @@ type ScoreResult = {
 
 type SpotlightGame = {
   id: string;
+  slug: string;
   name: string;
   micro: number;
   meso: number;
   macro: number;
   thumbnail?: string | null;
   release_year?: number | null;
+  genre?: string | null;
+  publisher?: string | null;
 };
 
 const AXES = [
@@ -292,33 +295,56 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Spotlight — three from the top 50, each with its spider graph */}
-              <div className="mt-12">
-                <div className="mb-4 flex items-center justify-center gap-3">
-                  <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
-                    Top 50 · spotlight
-                  </h2>
-                  <button
-                    onClick={loadSpotlight}
-                    title="Show three different games"
-                    className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
-                  >
-                    ⟳
-                  </button>
-                </div>
-                <div className="mx-auto grid w-[70%] min-w-[280px] gap-6 sm:grid-cols-3">
-                  {spotlight === null
-                    ? [0, 1, 2].map((i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-panel" />)
-                    : spotlight.map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => search(s.name)}
-                          className="group rounded-2xl border border-edge bg-panel p-3 text-center transition hover:border-macro"
-                        >
-                          <GameTriangle game={s} size={180} />
-                          <p className="mt-1 truncate text-sm font-semibold">{s.name}</p>
-                        </button>
-                      ))}
+              {/* Spotlight — three from the top 50, full-width cards with spiders.
+                  Breaks out of the narrow main column to span the body. */}
+              <div className="relative left-1/2 mt-12 w-screen -translate-x-1/2 px-6">
+                <div className="mx-auto max-w-6xl">
+                  <div className="mb-5 flex items-center justify-center gap-3">
+                    <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
+                      Top 50 · spotlight
+                    </h2>
+                    <button
+                      onClick={loadSpotlight}
+                      title="Show three different games"
+                      className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+                    >
+                      ⟳
+                    </button>
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-3">
+                    {spotlight === null
+                      ? [0, 1, 2].map((i) => <div key={i} className="h-96 animate-pulse rounded-2xl bg-panel" />)
+                      : spotlight.map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => search(s.name)}
+                            className="group glow-box flex flex-col overflow-hidden rounded-2xl bg-panel text-left transition"
+                            style={{ ["--glow" as string]: "var(--color-edge)" }}
+                          >
+                            {s.thumbnail && (
+                              <div className="relative">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={s.thumbnail} alt="" className="h-32 w-full object-cover transition group-hover:brightness-110" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
+                              </div>
+                            )}
+                            <div className="flex flex-1 flex-col p-4">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <h3 className="font-display truncate text-lg font-bold">{s.name}</h3>
+                                {s.release_year && <span className="shrink-0 text-xs text-fog">{s.release_year}</span>}
+                              </div>
+                              {(s.genre || s.publisher) && (
+                                <p className="mt-0.5 truncate text-xs text-fog">
+                                  {[s.genre, s.publisher].filter(Boolean).join(" · ")}
+                                </p>
+                              )}
+                              <div className="mt-2">
+                                <GameTriangle game={s} size={230} />
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"; // fresh random sample per request
 export async function GET() {
   const { data, error } = await db
     .from("games")
-    .select("id,name,micro,meso,macro,thumbnail,release_year")
+    .select("id,slug,name,micro,meso,macro,thumbnail,release_year,genre,publisher")
     .not("featured_rank", "is", null);
 
   if (error || !data?.length) return NextResponse.json({ games: [] });

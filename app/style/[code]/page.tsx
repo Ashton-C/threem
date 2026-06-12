@@ -54,7 +54,7 @@ export default async function StylePage({
         </p>
 
         <div className="mt-6 grid items-center gap-6 sm:grid-cols-[200px_1fr]">
-          <GameTriangle game={s.avg} size={200} />
+          <GameTriangle game={s.avg} size={250} />
           <div className="space-y-3">
             {AXES.map((a) => (
               <div key={a.key}>
