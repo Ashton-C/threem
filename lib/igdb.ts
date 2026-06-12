@@ -46,19 +46,22 @@ export async function findIgdbArt(name: string): Promise<string | null> {
     const res = await fetch("https://api.igdb.com/v4/games", {
       method: "POST",
       headers: { "Client-ID": ID, Authorization: `Bearer ${tok}`, Accept: "application/json" },
-      body: `search "${name.replace(/"/g, "")}"; fields name,artworks.image_id,screenshots.image_id,cover.image_id; limit 6;`,
+      body: `search "${name.replace(/"/g, "")}"; fields name,artworks.image_id,screenshots.image_id,cover.image_id; limit 10;`,
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const items = (await res.json()) as IgdbGame[];
     if (!Array.isArray(items) || !items.length) return null;
 
+    // prefer an exact title match over fuzzy ones (avoids mods/bundles)
     const want = slugify(name);
     const hit =
+      items.find((it) => slugify(it.name) === want) ??
       items.find((it) => {
         const s = slugify(it.name);
-        return s === want || s.includes(want) || want.includes(s);
-      }) ?? items[0];
+        return s.includes(want) || want.includes(s);
+      }) ??
+      items[0];
 
     const art = hit.artworks?.[0]?.image_id;
     const shot = hit.screenshots?.[0]?.image_id;
