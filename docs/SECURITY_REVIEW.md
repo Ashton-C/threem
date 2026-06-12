@@ -3,6 +3,17 @@
 Status: **security pass applied 2026-06-10 — all findings resolved or accepted.**
 First reviewed 2026-06-10; fixes applied same day after the feature sprint.
 
+Re-verified 2026-06-12 (pre-ship): all 7 fixes confirmed present at the code
+level against the new Gemma-4 scoring path — #1 `ipAddress(req)`
+(`lib/ratelimit.ts`), #2 global `60/60s` limiter (both must pass), #3
+`MAX_INPUT=100` (`/api/score`), #4 fail-closed in prod, #5 output sanity-gate
+(`lib/resolve.ts`), #6 `server-only` (`lib/supabase.ts`), #7 generic
+`/api/library` errors. The Gemma-4 switch is neutral-to-positive for #5: input
+still flows as `GAME: ${input}` behind the 100-char cap + sanity-gate, and the
+new `responseSchema` (with `maxLength` caps) further constrains persisted
+output. **Still TODO post-deploy:** re-run the live RLS probe and confirm the
+`SameSite` auth-cookie flag on the deployed domain (not reproducible locally).
+
 ## Resolved this pass
 - **#1 XFF spoofing** → IP now from `@vercel/functions` `ipAddress(req)` (signed
   platform header), never client `X-Forwarded-For`. `lib/ratelimit.ts:clientIp`.
