@@ -3,10 +3,16 @@
 // No Next.js or DB imports here so it can run standalone under plain node.
 import { ANCHORS } from "./anchors.ts";
 
-// Free-tier model. gemini-3.5-flash is billed; flash-lite is free and
-// (with the anchor rubric) calibrates well + reliably emits JSON.
-export const GEMINI_MODEL = "gemini-flash-lite-latest";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// Free-tier models. PRIMARY is Gemma 4 31B (1.5k req/day, unlimited tokens);
+// on DAILY-quota exhaustion we chain to flash-lite (a separate ~500/day bucket),
+// which is the proven prior production model. Both are free.
+// NB: gemma-4-26b-a4b-it (the smaller sibling) is catalogued but returns HTTP 500
+// on every call as of 2026-06, so it is NOT used as the fallback.
+export const PRIMARY_MODEL = "gemma-4-31b-it";
+export const FALLBACK_MODEL = "gemini-flash-lite-latest";
+export const GEMINI_MODEL = PRIMARY_MODEL; // back-comat label for the test suite
+const urlFor = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 // build the anchor block from the shared source so prompt + /about can't drift
 const anchorBlock = (["micro", "meso", "macro"] as const)
@@ -60,9 +66,57 @@ export type ScoreResult =
       release_year?: number | null;
     };
 
-/** Calls Gemini and parses the rubric JSON. Throws on API or parse failure. */
-export async function scoreGame(input: string): Promise<ScoreResult> {
-  const res = await fetch(GEMINI_URL, {
+// Guided-decoding schema for Gemma 4. responseMimeType:"application/json" ALONE
+// does NOT constrain Gemma to JSON — only an explicit responseSchema does.
+// The maxLength caps are load-bearing: without them Gemma 4 at temp 0.1 falls
+// into repetition loops ("own own own…") that overflow maxOutputTokens and
+// produce unparseable truncated JSON. propertyOrdering keeps reason BEFORE score
+// so the model still "reasons before the number" (rule 1) under guided decoding.
+const AXIS_SCHEMA = {
+  type: "object",
+  properties: { reason: { type: "string", maxLength: 240 }, score: { type: "integer" } },
+  required: ["reason", "score"],
+  propertyOrdering: ["reason", "score"],
+};
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    game: { type: "string", maxLength: 80 },
+    recognized: { type: "boolean" },
+    micro: AXIS_SCHEMA,
+    meso: AXIS_SCHEMA,
+    macro: AXIS_SCHEMA,
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    genre: { type: "string", nullable: true, maxLength: 40 },
+    subgenres: { type: "array", items: { type: "string", maxLength: 40 }, nullable: true },
+    publisher: { type: "string", nullable: true, maxLength: 60 },
+    release_year: { type: "integer", nullable: true },
+  },
+  required: ["game", "recognized", "micro", "meso", "macro", "confidence"],
+  propertyOrdering: [
+    "game", "recognized", "micro", "meso", "macro",
+    "confidence", "genre", "subgenres", "publisher", "release_year",
+  ],
+};
+
+/** Raised only on PerDay quota exhaustion — triggers the model fallback.
+ *  Per-minute 429s are transient and retried on the same model instead. */
+class DailyCapError extends Error {}
+
+type ModelOpts = { schema: boolean; thinking: boolean };
+
+/** One generateContent call. Gemma needs responseSchema (+ no thinking);
+ *  flash-lite needs thinkingConfig (+ no schema). Throws on API/parse failure. */
+async function callModel(model: string, input: string, opts: ModelOpts): Promise<ScoreResult> {
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.1, // low temp = stable scores
+    maxOutputTokens: 1500,
+    responseMimeType: "application/json",
+  };
+  if (opts.schema) generationConfig.responseSchema = RESULT_SCHEMA;
+  if (opts.thinking) generationConfig.thinkingConfig = { thinkingLevel: "low" };
+
+  const res = await fetch(urlFor(model), {
     method: "POST",
     headers: {
       "x-goog-api-key": process.env.GOOGLE_AI_API_SECRET!,
@@ -71,20 +125,46 @@ export async function scoreGame(input: string): Promise<ScoreResult> {
     body: JSON.stringify({
       contents: [{ parts: [{ text: `GAME: ${input}` }] }],
       systemInstruction: { parts: [{ text: SYSTEM }] },
-      generationConfig: {
-        temperature: 0.1, // low temp = stable scores
-        maxOutputTokens: 1500, // headroom for thinking tokens
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingLevel: "low" },
-      },
+      generationConfig,
     }),
   });
   if (!res.ok) {
-    throw new Error(`gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const body = await res.text();
+    if (res.status === 429 && /per\s*day|PerDay/i.test(body)) {
+      throw new DailyCapError(`${model} daily cap: ${body.slice(0, 200)}`);
+    }
+    throw new Error(`${model} ${res.status}: ${body.slice(0, 300)}`);
   }
   const data = await res.json();
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .map((p: { text?: string }) => p.text ?? "")
     .join("");
   return JSON.parse(text.replace(/```json|```/g, "").trim());
+}
+
+/** Retry a model for transient failures (parse truncation, recitation blocks,
+ *  per-minute 429). DailyCapError and other hard errors bubble straight up. */
+async function callWithRetry(model: string, input: string, opts: ModelOpts): Promise<ScoreResult> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await callModel(model, input, opts);
+    } catch (err) {
+      if (err instanceof DailyCapError || attempt >= 3) throw err;
+      const wait = /\b429\b/.test(String(err)) ? 15000 : 1500;
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
+/** Scores a game. Calls Gemma 4 31B; on DAILY-quota exhaustion only, transparently
+ *  falls back to flash-lite. Throws on API or parse failure after retries. */
+export async function scoreGame(input: string): Promise<ScoreResult> {
+  try {
+    return await callWithRetry(PRIMARY_MODEL, input, { schema: true, thinking: false });
+  } catch (err) {
+    if (err instanceof DailyCapError) {
+      return await callWithRetry(FALLBACK_MODEL, input, { schema: false, thinking: true });
+    }
+    throw err;
+  }
 }

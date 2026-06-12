@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test:scoring": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/consistency-test.ts",
+    "test:gemma": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/gemma-test.ts",
     "seed:top50": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-top50.ts",
     "seed:catalog": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-catalog.ts",
     "backfill:art": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/backfill-art.ts"
