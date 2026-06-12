@@ -5,6 +5,7 @@ import { db } from "./supabase.ts";
 import { slugify } from "./slug.ts";
 import { scoreGame } from "./scoring.ts";
 import { findSteamMeta } from "./steam.ts";
+import { findIgdbArt } from "./igdb.ts";
 
 export type GameRow = {
   id: string;
@@ -70,6 +71,8 @@ export async function scoreAndCache(
 
   if (!game) {
     const steam = await findSteamMeta(parsed.game);
+    // every game gets art: Steam header first, IGDB key art as fallback
+    const thumbnail = steam?.thumbnail ?? (await findIgdbArt(parsed.game));
     const { data: inserted, error: insertErr } = await db.from("games").insert({
       slug: canonSlug,
       name: parsed.game,
@@ -88,7 +91,7 @@ export async function scoreAndCache(
       release_year: parsed.release_year ?? null,
       steam_appid: steam?.steam_appid ?? null,
       steam_url: steam?.steam_url ?? null,
-      thumbnail: steam?.thumbnail ?? null,
+      thumbnail,
     }).select().single();
 
     if (insertErr) {
