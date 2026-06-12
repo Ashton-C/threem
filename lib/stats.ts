@@ -1,7 +1,7 @@
 // Aggregate stats over the whole scored catalog. Pure function so the
 // /api/stats route and the /stats page share one implementation.
 
-import { archetype, ARCHETYPES } from "./archetype";
+import { archetype, ARCHETYPES } from "./archetype.ts";
 
 export type StatRow = {
   micro: number;
