@@ -57,3 +57,20 @@ body {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
 }
+
+/* indeterminate progress: a segment that sweeps across its track, so a slow
+   score reads as active work rather than a stalled page */
+@keyframes loading-slide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(520%); }
+}
+.loading-bar {
+  width: 22%;
+  animation: loading-slide 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    width: 100%;
+    animation: pulse-glow 1.4s ease-in-out infinite;
+  }
+}

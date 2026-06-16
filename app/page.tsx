@@ -71,7 +71,19 @@ export default function Home() {
   const [steamReturn, setSteamReturn] = useState<string | null>(null);
   const [steamError, setSteamError] = useState(false);
   const [searchedTerm, setSearchedTerm] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const lastSearchRef = useRef<{ q: string; force: boolean }>({ q: "", force: false });
+
+  // tidy up an in-flight score if the user navigates away mid-request
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      controllerRef.current?.abort();
+    };
+  }, []);
 
   const loadSpotlight = useCallback(async () => {
     try {
@@ -121,22 +133,44 @@ export default function Home() {
     const query = (q ?? input).trim();
     if (!query || loading) return;
     if (q) setInput(q);
+    lastSearchRef.current = { q: query, force };
     setSearchedTerm(query);
     setMatches([]);
-    setLoading(true);
     setResult(null);
+    setElapsed(0);
+    setLoading(true);
+    // tick a visible "still working" counter so a slow score never looks frozen
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    // hard client-side ceiling just above the server's maxDuration, so a stuck
+    // request resolves to a clear timeout message instead of spinning forever
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const ceiling = setTimeout(() => controller.abort(), 62_000);
     try {
       const res = await fetch("/api/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: query, force }),
+        signal: controller.signal,
       });
       setResult(await res.json());
-    } catch {
-      setResult({ error: "request failed" });
+    } catch (err) {
+      const timedOut = err instanceof DOMException && err.name === "AbortError";
+      setResult({
+        error: timedOut
+          ? "That took too long to score — the model may be busy. Please try again."
+          : "Couldn’t reach the scorer. Check your connection and try again.",
+      });
+    } finally {
+      clearTimeout(ceiling);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+      setLoading(false);
     }
-    setLoading(false);
   }
+
+  const retry = () => search(lastSearchRef.current.q, lastSearchRef.current.force);
 
   function onInputChange(value: string) {
     setInput(value);
@@ -362,15 +396,45 @@ export default function Home() {
             </div>
           )}
 
-          {/* Loading skeleton */}
+          {/* Loading state — an explicit "working" panel so a slow first-time
+              score reads as progress, not a frozen/crashed page. */}
           {loading && (
-            <div className="mt-10 space-y-7">
-              {AXES.map((a) => (
-                <div key={a.key} className="animate-pulse">
-                  <div className="mb-2 h-4 w-20 rounded bg-edge" />
-                  <div className="h-3 rounded-full bg-edge" />
+            <div className="pop-in mt-10">
+              <div className="glow-box rounded-xl bg-panel p-5" style={{ ["--glow" as string]: "var(--color-macro)" }} role="status" aria-live="polite">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-display text-sm font-bold uppercase tracking-wider" style={{ color: "var(--color-macro)" }}>
+                    Analyzing{searchedTerm ? <> “<span className="text-paper">{searchedTerm}</span>”</> : null}…
+                  </p>
+                  {/* per-second tick is decorative — kept out of the live region so it
+                      isn't re-announced every second */}
+                  <span className="font-mono text-xs tabular-nums text-fog" aria-hidden="true">{elapsed}s</span>
                 </div>
-              ))}
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-edge" aria-hidden="true">
+                  <div className="loading-bar h-full rounded-full" style={{ background: "var(--color-macro)" }} />
+                </div>
+                <p className="mt-3 text-sm text-fog">
+                  First-time scoring runs the game through the model and looks up its
+                  art — usually a few seconds, up to ~30s for a brand-new or obscure
+                  title. Every repeat search is instant.
+                </p>
+                {elapsed >= 12 && elapsed < 25 && (
+                  <p className="mt-1 text-xs text-fog/70">Still working — hang tight…</p>
+                )}
+                {elapsed >= 25 && (
+                  <p className="mt-1 text-xs text-fog/70">
+                    Almost there — first-time scores for an obscure title can take a little longer.
+                  </p>
+                )}
+              </div>
+              {/* axis placeholders below for visual continuity */}
+              <div className="mt-7 space-y-7">
+                {AXES.map((a) => (
+                  <div key={a.key} className="animate-pulse">
+                    <div className="mb-2 h-4 w-20 rounded bg-edge" />
+                    <div className="h-3 rounded-full bg-edge" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -380,9 +444,18 @@ export default function Home() {
             </p>
           )}
           {result?.error && (
-            <p className="pop-in mt-10 text-lg" style={{ color: "var(--color-micro)" }}>
-              Something went wrong: {result.error}
-            </p>
+            <div className="pop-in mt-10">
+              <p className="text-lg" style={{ color: "var(--color-micro)" }}>
+                {result.error}
+              </p>
+              <button
+                onClick={retry}
+                className="font-display mt-3 rounded-lg px-5 py-2 text-sm font-bold uppercase tracking-wider text-ink transition hover:brightness-110"
+                style={{ background: "var(--color-macro)" }}
+              >
+                Try again
+              </button>
+            </div>
           )}
 
           {/* Game card */}
