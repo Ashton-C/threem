@@ -14,6 +14,7 @@
     "seed:top50": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-top50.ts",
     "seed:catalog": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-catalog.ts",
     "seed:all": "npm run seed:top50 && npm run seed:catalog",
+    "seed:steam": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/seed-steam.ts",
     "backfill:art": "node --conditions=react-server --experimental-strip-types --env-file=.env.local scripts/backfill-art.ts"
   },
   "dependencies": {
