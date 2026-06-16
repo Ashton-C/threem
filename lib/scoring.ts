@@ -201,7 +201,12 @@ async function callWithRetry(
     } catch (err) {
       if (err instanceof DailyCapError) throw err; // never retried — caller falls back
       const is429 = err instanceof RateLimitError;
-      if (attempt >= maxAttempts) {
+      // Retry the SAME model only for things that plausibly clear on a second
+      // try: a per-minute limit, or an empty/blocked parse blip. A 5xx or a
+      // timeout means the model itself is unhealthy — don't burn another slow
+      // attempt on it; bubble out so scoreGame can fall back to the other model.
+      const retryable = is429 || /returned no JSON/.test(String(err));
+      if (attempt >= maxAttempts || !retryable) {
         if (is429) throw new BusyError(`${model} rate limited: ${String(err).slice(0, 120)}`);
         throw err;
       }
@@ -210,23 +215,22 @@ async function callWithRetry(
   }
 }
 
-/** Scores a game. Calls Gemma 4 31B; on DAILY-quota exhaustion only, transparently
- *  falls back to flash-lite (a single attempt — the primary already spent a full
- *  retry budget, and the user is waiting). Throws on API or parse failure. */
+/** Scores a game. Tries the high-quota primary (Gemma 4 31B); on ANY failure —
+ *  daily cap, per-minute limit, 5xx, or timeout — falls back to the stable
+ *  flash-lite model (a single attempt — the user is waiting). Free-tier Gemma 4
+ *  intermittently returns 500/503 and times out, so the fallback can't be
+ *  reserved for the daily cap alone. Throws on API/parse failure after both. */
 export async function scoreGame(input: string): Promise<ScoreResult> {
   try {
     return await callWithRetry(PRIMARY_MODEL, input, { schema: true, thinking: false });
-  } catch (err) {
-    if (err instanceof DailyCapError) {
-      try {
-        return await callWithRetry(FALLBACK_MODEL, input, { schema: false, thinking: true }, FALLBACK_ATTEMPTS);
-      } catch (fallbackErr) {
-        // both models' daily quotas are spent — that's "come back later", not a
-        // crash, so surface it as a BusyError (→ friendly 429) like a rate limit.
-        if (fallbackErr instanceof DailyCapError) throw new BusyError("all models at daily cap");
-        throw fallbackErr;
-      }
+  } catch {
+    // primary is flaky or exhausted — fall through to the proven model
+    try {
+      return await callWithRetry(FALLBACK_MODEL, input, { schema: false, thinking: true }, FALLBACK_ATTEMPTS);
+    } catch (fallbackErr) {
+      // both models down or capped = "come back in a moment", not a hard crash
+      if (fallbackErr instanceof DailyCapError) throw new BusyError("all models at daily cap");
+      throw fallbackErr;
     }
-    throw err;
   }
 }

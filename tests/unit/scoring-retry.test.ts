@@ -35,15 +35,22 @@ const VALID_SCORE = {
   confidence: "high",
 };
 
-test("a stubborn per-minute 429 surfaces as BusyError after one retry", async () => {
-  let calls = 0;
-  globalThis.fetch = (async () => {
-    calls++;
-    return errorResponse(429, "RESOURCE_EXHAUSTED: per-minute quota, please retry");
-  }) as typeof fetch;
+test("a flaky primary (503) falls back to the stable model and returns a score", async () => {
+  let primaryCalls = 0;
+  let fallbackCalls = 0;
+  globalThis.fetch = (async (url: string) => {
+    if (String(url).includes(PRIMARY)) {
+      primaryCalls++;
+      return errorResponse(503, '{ "error": { "code": 503, "message": "overloaded" } }');
+    }
+    fallbackCalls++;
+    return okResponse(VALID_SCORE);
+  }) as unknown as typeof fetch;
 
-  await assert.rejects(() => scoreGame("Whatever"), (e: unknown) => e instanceof BusyError);
-  assert.equal(calls, 2, "should try once and retry once, then give up");
+  const r = await scoreGame("Super Smash Bros 64");
+  assert.ok(r.recognized, "should recover via the fallback model");
+  assert.equal(primaryCalls, 1, "a 5xx is not retried on the unhealthy primary");
+  assert.equal(fallbackCalls, 1, "fallback model runs a single attempt");
 });
 
 test("a daily-cap 429 falls back to the secondary model and returns a score", async () => {
@@ -64,7 +71,19 @@ test("a daily-cap 429 falls back to the secondary model and returns a score", as
   assert.equal(fallbackCalls, 1, "fallback model runs a single attempt");
 });
 
-test("an empty/blocked model response is retried, then surfaces a clear (non-busy) error", async () => {
+test("a stubborn per-minute 429 on both models surfaces as BusyError", async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls++;
+    return errorResponse(429, "RESOURCE_EXHAUSTED: per-minute quota, please retry");
+  }) as typeof fetch;
+
+  await assert.rejects(() => scoreGame("Whatever"), (e: unknown) => e instanceof BusyError);
+  // primary: try + retry (2), then fallback: single attempt (1)
+  assert.equal(calls, 3);
+});
+
+test("an empty/blocked response on both models surfaces a clear (non-busy) error", async () => {
   let calls = 0;
   globalThis.fetch = (async () => {
     calls++;
@@ -79,10 +98,11 @@ test("an empty/blocked model response is retried, then surfaces a clear (non-bus
     () => scoreGame("Test"),
     (e: unknown) => !(e instanceof BusyError) && /no JSON/.test(String(e)),
   );
-  assert.equal(calls, 2, "empty responses are transient — retried once");
+  // empty is a transient parse blip: primary retries once (2), fallback once (1)
+  assert.equal(calls, 3);
 });
 
-test("a request timeout is retried and never mistaken for a rate limit", async () => {
+test("a request timeout falls back fast and is never mistaken for a rate limit", async () => {
   let calls = 0;
   globalThis.fetch = (async () => {
     calls++;
@@ -93,5 +113,7 @@ test("a request timeout is retried and never mistaken for a rate limit", async (
     () => scoreGame("Test"),
     (e: unknown) => !(e instanceof BusyError) && (e as Error).name === "TimeoutError",
   );
+  // a timeout means the model is unhealthy: no same-model retry — one primary
+  // attempt, then one fallback attempt
   assert.equal(calls, 2);
 });
