@@ -46,4 +46,6 @@ for (const [i, title] of MORE_GAMES.entries()) {
 }
 
 console.log(`\ndone: ${scored} scored, ${cached} already cached, ${failed} failed`);
-process.exit(0);
+// non-zero on residual failures so `npm run seed:all` (and CI) can tell a
+// partial warm-up from a complete one, matching scripts/seed-top50.ts
+process.exit(failed ? 1 : 0);

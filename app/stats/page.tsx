@@ -38,6 +38,28 @@ export default async function StatsPage() {
         <span className="font-mono text-fog">({intensity(s.avg).toFixed(1)})</span>.
       </p>
 
+      {/* what this page is — orient a first-time visitor before the charts */}
+      <div className="glow-box mt-6 rounded-xl bg-panel p-5" style={{ ["--glow" as string]: "var(--color-edge)" }}>
+        <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
+          What am I looking at?
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-fog">
+          Every game here is scored 0–10 on three skills:{" "}
+          <span style={{ color: "var(--color-micro)" }}>Micro</span> (moment-to-moment execution),{" "}
+          <span style={{ color: "var(--color-meso)" }}>Meso</span> (mid-term tactics), and{" "}
+          <span style={{ color: "var(--color-macro)" }}>Macro</span> (long-term strategy). This page
+          is the whole catalog at a glance — use it to find games by the kind of
+          skill they demand.
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-fog">
+          <span className="text-paper">Try this:</span> in the scatter below, set
+          X to <span style={{ color: "var(--color-macro)" }}>Macro</span> and Y to{" "}
+          <span style={{ color: "var(--color-meso)" }}>Meso</span>, then look at the
+          top-right — those are the deep strategy-and-tactics games. Hover a dot for
+          its name, click it to open the game.
+        </p>
+      </div>
+
       {/* axis averages */}
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         {AXES.map((a) => (
@@ -58,7 +80,11 @@ export default async function StatsPage() {
           <h2 className="font-display mt-12 text-xs font-bold uppercase tracking-[0.2em] text-fog">
             Explore the field
           </h2>
-          <p className="mb-4 mt-1 text-sm text-fog">Plot the whole catalog on any two axes.</p>
+          <p className="mb-4 mt-1 text-sm text-fog">
+            Pick any two axes for the X and Y. Each dot is a game — hover for its
+            name, click to open it. Corners are the extremes (e.g. high-X/high-Y =
+            demanding on both).
+          </p>
           <ScatterPlot points={scatter} />
         </>
       )}

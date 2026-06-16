@@ -103,10 +103,38 @@ const RESULT_SCHEMA = {
  *  Per-minute 429s are transient and retried on the same model instead. */
 class DailyCapError extends Error {}
 
+/** Per-minute (transient) rate limit. Retried briefly on the same model; if it
+ *  won't clear, the caller turns it into a user-facing BusyError. Carried as a
+ *  typed error (not a string match) so a 500/503 whose body merely contains the
+ *  token "429" can't be mistaken for a real rate limit. */
+class RateLimitError extends Error {}
+
+/** Raised when the per-minute free-tier limit is hit and a short retry didn't
+ *  clear it. Distinct from a generic failure so the API route can tell the user
+ *  "busy, try again" instead of "broken". */
+export class BusyError extends Error {}
+
+// A user is waiting on this request, and the serverless function has a hard wall
+// clock (see `maxDuration` in app/api/score/route.ts). The LLM is the only
+// un-bounded hop in the path, so every call is capped and the retry budget is
+// kept small: a fast clean failure beats a 30s hang that reads as a crash.
+// Timings are env-overridable purely so tests can drive the retry paths without
+// real sleeps; production uses the defaults.
+const envMs = (key: string, fallback: number) => {
+  const v = Number(process.env[key]);
+  return Number.isFinite(v) ? v : fallback;
+};
+const CALL_TIMEOUT_MS = () => envMs("SCORING_CALL_TIMEOUT_MS", 12_000); // per network attempt
+const BACKOFF_429_MS = () => envMs("SCORING_BACKOFF_429_MS", 4_000); // give a per-minute limit a beat to reset
+const BACKOFF_BLIP_MS = () => envMs("SCORING_BACKOFF_BLIP_MS", 1_200); // parse truncation / transient timeout
+const MAX_ATTEMPTS = 2; // primary: one retry; 429-clear backoff included below
+const FALLBACK_ATTEMPTS = 1; // fallback already cost a full primary budget — don't double it
+
 type ModelOpts = { schema: boolean; thinking: boolean };
 
 /** One generateContent call. Gemma needs responseSchema (+ no thinking);
- *  flash-lite needs thinkingConfig (+ no schema). Throws on API/parse failure. */
+ *  flash-lite needs thinkingConfig (+ no schema). Throws on API/parse failure.
+ *  Hard-capped at CALL_TIMEOUT_MS so a stalled upstream can't hang the request. */
 async function callModel(model: string, input: string, opts: ModelOpts): Promise<ScoreResult> {
   const generationConfig: Record<string, unknown> = {
     temperature: 0.1, // low temp = stable scores
@@ -127,43 +155,77 @@ async function callModel(model: string, input: string, opts: ModelOpts): Promise
       systemInstruction: { parts: [{ text: SYSTEM }] },
       generationConfig,
     }),
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS()),
   });
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 429 && /per\s*day|PerDay/i.test(body)) {
-      throw new DailyCapError(`${model} daily cap: ${body.slice(0, 200)}`);
+    if (res.status === 429) {
+      // distinguish the daily cap (→ fall back to the other model) from a
+      // per-minute limit (→ short retry, then a friendly "busy")
+      if (/per\s*day|PerDay/i.test(body)) {
+        throw new DailyCapError(`${model} daily cap: ${body.slice(0, 200)}`);
+      }
+      throw new RateLimitError(`${model} 429: ${body.slice(0, 200)}`);
     }
     throw new Error(`${model} ${res.status}: ${body.slice(0, 300)}`);
   }
   const data = await res.json();
-  const text = (data.candidates?.[0]?.content?.parts ?? [])
+  const cand = data.candidates?.[0];
+  const text = (cand?.content?.parts ?? [])
     .map((p: { text?: string }) => p.text ?? "")
-    .join("");
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
+    .join("")
+    .replace(/```json|```/g, "")
+    .trim();
+  // An empty body means the model was truncated (MAX_TOKENS), blocked
+  // (SAFETY/RECITATION), or returned nothing. Surface *why* and let the caller
+  // retry, rather than letting JSON.parse("") throw an opaque syntax error.
+  if (!text) {
+    const why = cand?.finishReason ?? data.promptFeedback?.blockReason ?? "empty response";
+    throw new Error(`${model} returned no JSON (${why})`);
+  }
+  return JSON.parse(text);
 }
 
 /** Retry a model for transient failures (parse truncation, recitation blocks,
- *  per-minute 429). DailyCapError and other hard errors bubble straight up. */
-async function callWithRetry(model: string, input: string, opts: ModelOpts): Promise<ScoreResult> {
+ *  request timeout, per-minute 429). DailyCapError bubbles straight up to
+ *  trigger the model fallback; a stubborn per-minute 429 becomes a BusyError. */
+async function callWithRetry(
+  model: string,
+  input: string,
+  opts: ModelOpts,
+  maxAttempts = MAX_ATTEMPTS
+): Promise<ScoreResult> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await callModel(model, input, opts);
     } catch (err) {
-      if (err instanceof DailyCapError || attempt >= 3) throw err;
-      const wait = /\b429\b/.test(String(err)) ? 15000 : 1500;
-      await new Promise((r) => setTimeout(r, wait));
+      if (err instanceof DailyCapError) throw err; // never retried — caller falls back
+      const is429 = err instanceof RateLimitError;
+      if (attempt >= maxAttempts) {
+        if (is429) throw new BusyError(`${model} rate limited: ${String(err).slice(0, 120)}`);
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, is429 ? BACKOFF_429_MS() : BACKOFF_BLIP_MS()));
     }
   }
 }
 
 /** Scores a game. Calls Gemma 4 31B; on DAILY-quota exhaustion only, transparently
- *  falls back to flash-lite. Throws on API or parse failure after retries. */
+ *  falls back to flash-lite (a single attempt — the primary already spent a full
+ *  retry budget, and the user is waiting). Throws on API or parse failure. */
 export async function scoreGame(input: string): Promise<ScoreResult> {
   try {
     return await callWithRetry(PRIMARY_MODEL, input, { schema: true, thinking: false });
   } catch (err) {
     if (err instanceof DailyCapError) {
-      return await callWithRetry(FALLBACK_MODEL, input, { schema: false, thinking: true });
+      try {
+        return await callWithRetry(FALLBACK_MODEL, input, { schema: false, thinking: true }, FALLBACK_ATTEMPTS);
+      } catch (fallbackErr) {
+        // both models' daily quotas are spent — that's "come back later", not a
+        // crash, so surface it as a BusyError (→ friendly 429) like a rate limit.
+        if (fallbackErr instanceof DailyCapError) throw new BusyError("all models at daily cap");
+        throw fallbackErr;
+      }
     }
     throw err;
   }
