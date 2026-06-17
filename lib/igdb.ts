@@ -74,3 +74,62 @@ export async function findIgdbArt(name: string): Promise<string | null> {
     return null;
   }
 }
+
+export type IgdbCandidate = { name: string; year: number | null; cover: string | null };
+
+// Name search over IGDB's full catalog — powers the "which game did you mean?"
+// picker. Filters to real games (drops DLC/expansions/bundles) but keeps
+// remakes/remasters/ports so the original and its remake can both be offered.
+// Returns [] when unconfigured or on any failure (the picker degrades to our
+// own cached results + a "score it anyway" path).
+type IgdbGameRow = {
+  name?: string;
+  first_release_date?: number;
+  cover?: { image_id: string };
+};
+
+export async function searchIgdbGames(query: string): Promise<IgdbCandidate[]> {
+  const tok = await getToken();
+  if (!tok || !ID) return [];
+  const q = query.replace(/"/g, "");
+  const headers = { "Client-ID": ID, Authorization: `Bearer ${tok}`, Accept: "application/json" };
+  // game_type replaced the deprecated `category` field; same enum values:
+  // 0 main, 4 standalone expansion, 8 remake, 9 remaster, 10 expanded, 11 port
+  const TYPES = "(0,4,8,9,10,11)";
+  const FIELDS = "fields name,first_release_date,cover.image_id;";
+  // Two complementary passes, merged: `search` is relevance/punctuation/word-order
+  // tolerant ("baldurs gate" -> Baldur's Gate) but won't match a partial word,
+  // while a case-insensitive substring filter catches incremental typing
+  // ("death stra" -> Death Stranding). Neither handles heavy typos — that's what
+  // the "score it anyway" path (LLM) is for.
+  const bodies = [
+    `search "${q}"; ${FIELDS} where game_type = ${TYPES}; limit 10;`,
+    `${FIELDS} where name ~ *"${q}"* & game_type = ${TYPES}; sort total_rating_count desc; limit 10;`,
+  ];
+  try {
+    const batches = await Promise.all(
+      bodies.map((body) =>
+        fetch("https://api.igdb.com/v4/games", { method: "POST", headers, body, signal: AbortSignal.timeout(8000) })
+          .then((r) => (r.ok ? (r.json() as Promise<IgdbGameRow[]>) : []))
+          .catch(() => [] as IgdbGameRow[])
+      )
+    );
+    const seen = new Set<string>();
+    const out: IgdbCandidate[] = [];
+    for (const items of batches) {
+      if (!Array.isArray(items)) continue;
+      for (const it of items) {
+        if (!it.name || seen.has(it.name.toLowerCase())) continue;
+        seen.add(it.name.toLowerCase());
+        out.push({
+          name: it.name,
+          year: it.first_release_date ? new Date(it.first_release_date * 1000).getUTCFullYear() : null,
+          cover: it.cover?.image_id ? url("t_cover_big", it.cover.image_id) : null,
+        });
+      }
+    }
+    return out.slice(0, 14);
+  } catch {
+    return [];
+  }
+}

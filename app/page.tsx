@@ -48,6 +48,15 @@ type SpotlightGame = {
   publisher?: string | null;
 };
 
+// a candidate from /api/search — shown in the "which game did you mean?" picker
+type SearchHit = {
+  name: string;
+  year: number | null;
+  cover: string | null;
+  cached: boolean;
+  slug: string | null;
+};
+
 const AXES = [
   { key: "micro", label: "Micro", color: "var(--color-micro)", desc: "moment-to-moment execution — aim, reactions, combos" },
   { key: "meso", label: "Meso", color: "var(--color-meso)", desc: "mid-term tactics — reads, cooldowns, engages" },
@@ -60,7 +69,8 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [matches, setMatches] = useState<string[]>([]);
+  const [candidates, setCandidates] = useState<SearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
   const [spotlight, setSpotlight] = useState<SpotlightGame[] | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [library, setLibrary] = useState<Game[] | null>(null);
@@ -135,7 +145,7 @@ export default function Home() {
     if (q) setInput(q);
     lastSearchRef.current = { q: query, force };
     setSearchedTerm(query);
-    setMatches([]);
+    setCandidates([]);
     setResult(null);
     setElapsed(0);
     setLoading(true);
@@ -172,19 +182,44 @@ export default function Home() {
 
   const retry = () => search(lastSearchRef.current.q, lastSearchRef.current.force);
 
+  // search a comprehensive catalog (IGDB + our cache) so the user can confirm
+  // the exact game BEFORE a scoring call goes out
+  async function doSearch(value: string) {
+    const q = value.trim();
+    if (q.length < 2) {
+      setCandidates([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setCandidates(data.results ?? []);
+    } catch {
+      setCandidates([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
   function onInputChange(value: string) {
     setInput(value);
+    if (result) setResult(null); // typing again starts a fresh pick
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length < 2) return setMatches([]);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/suggest?q=${encodeURIComponent(value.trim())}`);
-        const data = await res.json();
-        setMatches(data.suggestions ?? []);
-      } catch {
-        setMatches([]);
-      }
-    }, 200);
+    if (value.trim().length < 2) {
+      setCandidates([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => doSearch(value), 350);
+  }
+
+  // Enter / Search button — run the search now, skipping the debounce wait
+  function triggerSearch() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    doSearch(input);
   }
 
   async function addToLibrary(gameId: string) {
@@ -202,7 +237,145 @@ export default function Home() {
   const inLibrary = (gameId: string) => library?.some((g) => g.id === gameId) ?? false;
 
   const g = result?.game;
-  const showLanding = !result && !loading;
+  const typing = input.trim().length >= 2;
+  const showLanding = !result && !loading && !typing;
+  const showPicker = !result && !loading && typing;
+
+  // landing pieces, extracted so the logged-in split and the logged-out single
+  // column can share them without duplicating JSX
+  const introBlock = (
+    <>
+      <h1 className="font-display text-3xl font-bold leading-tight sm:text-4xl">
+        What kind of skill does a game{" "}
+        <span className="whitespace-nowrap">actually ask of you?</span>
+      </h1>
+      <p className="mt-3 max-w-lg text-fog">
+        Every game is three skills at once. Type one and get it scored 0–10 on
+        each axis, judged against fixed anchors.
+      </p>
+      <div className="mt-8 grid gap-3 sm:grid-cols-3">
+        {AXES.map((a) => (
+          <div key={a.key} className="glow-box rounded-xl bg-panel p-4" style={{ ["--glow" as string]: a.color }}>
+            <div className="font-display text-lg font-bold glow-text" style={{ color: a.color, ["--glow" as string]: a.color }}>
+              {a.label}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-fog">{a.desc}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8">
+        <p className="mb-2 text-xs uppercase tracking-widest text-fog">Try one</p>
+        <div className="flex flex-wrap gap-2">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => search(s)}
+              className="rounded-full border border-edge px-3 py-1.5 text-sm text-fog transition hover:border-macro hover:text-paper"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+
+  const dataStrip =
+    stats && stats.total > 0 ? (
+      <div className="mt-10 border-t border-edge pt-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm text-fog">
+            <span className="font-display text-lg font-bold text-paper">{stats.total}</span>{" "}
+            games scored and counting
+          </p>
+          <div className="flex gap-3 text-sm">
+            <Link href="/browse" className="text-fog transition hover:text-paper">Explore →</Link>
+            <Link href="/stats" className="text-fog transition hover:text-paper">Stats →</Link>
+          </div>
+        </div>
+        {stats.genres.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {stats.genres.slice(0, 8).map((gn) => (
+              <Link
+                key={gn.genre}
+                href={`/browse?genre=${encodeURIComponent(gn.genre)}`}
+                className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-macro hover:text-paper"
+              >
+                {gn.genre}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  const spotlightHeading = (
+    <div className="mb-5 flex items-center justify-center gap-3">
+      <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">Top 50 · spotlight</h2>
+      <button
+        onClick={loadSpotlight}
+        title="Show three different games"
+        className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
+      >
+        ⟳
+      </button>
+    </div>
+  );
+
+  const spotlightCards =
+    spotlight === null
+      ? [0, 1, 2].map((i) => <div key={i} className="h-96 animate-pulse rounded-2xl bg-panel" />)
+      : spotlight.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => search(s.name)}
+            className="group glow-box flex flex-col overflow-hidden rounded-2xl bg-panel text-left transition hover:brightness-105"
+            style={{ ["--glow" as string]: "var(--color-edge)" }}
+          >
+            <div className="relative h-32 w-full overflow-hidden">
+              {s.thumbnail ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={s.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:brightness-110" />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center"
+                  style={{ background: "radial-gradient(120% 100% at 50% 0%, rgba(41,227,255,0.18), var(--color-ink2) 70%)" }}
+                >
+                  <span className="font-display px-4 text-center text-lg font-bold text-paper/80">{s.name}</span>
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
+            </div>
+            <div className="flex flex-1 flex-col p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-display truncate text-lg font-bold">{s.name}</h3>
+                {s.release_year && <span className="shrink-0 text-xs text-fog">{s.release_year}</span>}
+              </div>
+              {(s.genre || s.publisher) && (
+                <p className="mt-0.5 truncate text-xs text-fog">
+                  {[s.genre, s.publisher].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              <div className="mt-2">
+                <GameTriangle game={s} size={230} />
+              </div>
+              <div className="mt-auto px-1 pt-3">
+                <IntensityMeter game={s} compact />
+              </div>
+            </div>
+          </button>
+        ));
+
+  const yourStyle =
+    user && library !== null ? (
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">Your style</h2>
+          <SteamImport onImported={loadLibrary} initialSteamId={steamReturn} />
+        </div>
+        <StylePanel games={library} onRemove={removeFromLibrary} />
+      </section>
+    ) : null;
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
@@ -221,180 +394,121 @@ export default function Home() {
 
       <div>
         <section>
-          {/* Search */}
-          <div className="relative">
+          {/* Search — find the game in a comprehensive catalog, confirm, then score */}
+          <div>
             <div className="glow-box flex gap-2 rounded-xl bg-panel p-2" style={{ ["--glow" as string]: "var(--color-macro)" }}>
               <input
                 className="flex-1 bg-transparent px-3 py-2.5 text-lg text-paper placeholder-fog outline-none"
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && search()}
-                onBlur={() => setTimeout(() => setMatches([]), 150)}
-                placeholder="Enter a game…"
+                onKeyDown={(e) => e.key === "Enter" && triggerSearch()}
+                placeholder="Search a game…"
                 autoFocus
               />
               <button
-                onClick={() => search()}
-                disabled={loading}
-                className="font-display rounded-lg bg-macro px-6 font-bold uppercase tracking-wider text-ink transition hover:brightness-110 disabled:opacity-40"
+                onClick={triggerSearch}
+                disabled={input.trim().length < 2}
+                className="font-display rounded-lg px-6 font-bold uppercase tracking-wider text-ink transition hover:brightness-110 disabled:opacity-40"
                 style={{ background: "var(--color-macro)" }}
               >
-                {loading ? "···" : "Score"}
+                Search
               </button>
             </div>
-
-            {matches.length > 0 && (
-              <ul className="glow-box absolute z-10 mt-2 w-full overflow-hidden rounded-xl bg-panel" style={{ ["--glow" as string]: "var(--color-edge)" }}>
-                {matches.map((m) => (
-                  <li key={m}>
-                    <button
-                      onMouseDown={() => search(m)}
-                      className="block w-full px-4 py-2.5 text-left text-sm transition hover:bg-edge"
-                    >
-                      {m}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
 
-          {/* Landing / empty state */}
-          {showLanding && (
-            <div className="pop-in mt-10">
-              <h1 className="font-display text-3xl font-bold leading-tight sm:text-4xl">
-                What kind of skill does a game{" "}
-                <span className="whitespace-nowrap">actually ask of you?</span>
-              </h1>
-              <p className="mt-3 max-w-lg text-fog">
-                Every game is three skills at once. Type one and get it scored
-                0–10 on each axis, judged against fixed anchors.
-              </p>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                {AXES.map((a) => (
-                  <div
-                    key={a.key}
-                    className="glow-box rounded-xl bg-panel p-4"
-                    style={{ ["--glow" as string]: a.color }}
+          {/* Picker — matches + near-matches; nothing scores until a card is chosen */}
+          {showPicker && (
+            <div className="pop-in mt-6">
+              {candidates.length > 0 ? (
+                <>
+                  <p className="mb-3 text-xs uppercase tracking-widest text-fog">Which one did you mean?</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {candidates.map((c) => (
+                      <button
+                        key={c.slug ?? c.name}
+                        onClick={() => search(c.name)}
+                        className="group glow-box flex flex-col overflow-hidden rounded-xl bg-panel text-left transition hover:brightness-110"
+                        style={{ ["--glow" as string]: c.cached ? "var(--color-macro)" : "var(--color-edge)" }}
+                      >
+                        <div className="relative aspect-[3/4] w-full overflow-hidden bg-ink2">
+                          {c.cover ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={c.cover} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center p-3 text-center text-sm font-semibold text-fog">
+                              {c.name}
+                            </div>
+                          )}
+                          <span
+                            className="absolute right-1.5 top-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                            style={
+                              c.cached
+                                ? { background: "var(--color-macro)", color: "var(--color-ink)" }
+                                : { background: "var(--color-edge)", color: "var(--color-paper)" }
+                            }
+                          >
+                            {c.cached ? "✓ scored" : "new"}
+                          </span>
+                        </div>
+                        <div className="p-2.5">
+                          <p className="truncate text-sm font-semibold text-paper">{c.name}</p>
+                          <p className="text-xs text-fog">{c.year ?? "—"}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => search(input)}
+                    className="mt-4 text-sm text-fog underline underline-offset-2 transition hover:text-paper"
                   >
-                    <div className="font-display text-lg font-bold glow-text" style={{ color: a.color, ["--glow" as string]: a.color }}>
-                      {a.label}
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed text-fog">{a.desc}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-8">
-                <p className="mb-2 text-xs uppercase tracking-widest text-fog">Try one</p>
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => search(s)}
-                      className="rounded-full border border-edge px-3 py-1.5 text-sm text-fog transition hover:border-macro hover:text-paper"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* data strip — the collection at a glance */}
-              {stats && stats.total > 0 && (
-                <div className="mt-10 border-t border-edge pt-6">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm text-fog">
-                      <span className="font-display text-lg font-bold text-paper">{stats.total}</span>{" "}
-                      games scored and counting
-                    </p>
-                    <div className="flex gap-3 text-sm">
-                      <Link href="/browse" className="text-fog transition hover:text-paper">Explore →</Link>
-                      <Link href="/stats" className="text-fog transition hover:text-paper">Stats →</Link>
-                    </div>
-                  </div>
-                  {stats.genres.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {stats.genres.slice(0, 8).map((g) => (
-                        <Link
-                          key={g.genre}
-                          href={`/browse?genre=${encodeURIComponent(g.genre)}`}
-                          className="rounded-full border border-edge px-3 py-1 text-xs text-fog transition hover:border-macro hover:text-paper"
-                        >
-                          {g.genre}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+                    Don&apos;t see it? Score “{input.trim()}” anyway →
+                  </button>
+                </>
+              ) : searching ? (
+                <p className="text-sm text-fog">Searching…</p>
+              ) : (
+                <div>
+                  <p className="text-sm text-fog">No matches found for “{input.trim()}”.</p>
+                  <button
+                    onClick={() => search(input)}
+                    className="font-display mt-3 rounded-lg px-5 py-2 text-sm font-bold uppercase tracking-wider text-ink transition hover:brightness-110"
+                    style={{ background: "var(--color-macro)" }}
+                  >
+                    Score it anyway
+                  </button>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Spotlight — three from the top 50, full-width cards with spiders.
-                  Breaks out of the narrow main column to span the body. */}
-              <div className="relative left-1/2 mt-12 w-screen -translate-x-1/2 px-6">
-                <div className="mx-auto max-w-6xl">
-                  <div className="mb-5 flex items-center justify-center gap-3">
-                    <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
-                      Top 50 · spotlight
-                    </h2>
-                    <button
-                      onClick={loadSpotlight}
-                      title="Show three different games"
-                      className="rounded-full border border-edge px-2.5 py-0.5 text-xs text-fog transition hover:border-macro hover:text-paper"
-                    >
-                      ⟳
-                    </button>
+          {/* Landing — logged-in users get a split (explanation + spotlight on
+              the left, their style breakdown on the right); logged-out keeps the
+              single column with the full-width spotlight. */}
+          {showLanding &&
+            (yourStyle ? (
+              <div className="pop-in mt-10 grid gap-8 lg:grid-cols-[3fr_2fr]">
+                <div>
+                  {introBlock}
+                  {dataStrip}
+                  <div className="mt-12">
+                    {spotlightHeading}
+                    <div className="grid gap-5 sm:grid-cols-2">{spotlightCards}</div>
                   </div>
-                  <div className="grid gap-6 md:grid-cols-3">
-                    {spotlight === null
-                      ? [0, 1, 2].map((i) => <div key={i} className="h-96 animate-pulse rounded-2xl bg-panel" />)
-                      : spotlight.map((s) => (
-                          <button
-                            key={s.id}
-                            onClick={() => search(s.name)}
-                            className="group glow-box flex flex-col overflow-hidden rounded-2xl bg-panel text-left transition hover:brightness-105"
-                            style={{ ["--glow" as string]: "var(--color-edge)" }}
-                          >
-                            {/* header: real art, or a branded placeholder so every card matches */}
-                            <div className="relative h-32 w-full overflow-hidden">
-                              {s.thumbnail ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img src={s.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:brightness-110" />
-                              ) : (
-                                <div
-                                  className="flex h-full w-full items-center justify-center"
-                                  style={{ background: "radial-gradient(120% 100% at 50% 0%, rgba(41,227,255,0.18), var(--color-ink2) 70%)" }}
-                                >
-                                  <span className="font-display px-4 text-center text-lg font-bold text-paper/80">{s.name}</span>
-                                </div>
-                              )}
-                              <div className="absolute inset-0 bg-gradient-to-t from-panel to-transparent" />
-                            </div>
-                            <div className="flex flex-1 flex-col p-4">
-                              <div className="flex items-baseline justify-between gap-2">
-                                <h3 className="font-display truncate text-lg font-bold">{s.name}</h3>
-                                {s.release_year && <span className="shrink-0 text-xs text-fog">{s.release_year}</span>}
-                              </div>
-                              {(s.genre || s.publisher) && (
-                                <p className="mt-0.5 truncate text-xs text-fog">
-                                  {[s.genre, s.publisher].filter(Boolean).join(" · ")}
-                                </p>
-                              )}
-                              <div className="mt-2">
-                                <GameTriangle game={s} size={230} />
-                              </div>
-                              <div className="mt-auto px-1 pt-3">
-                                <IntensityMeter game={s} compact />
-                              </div>
-                            </div>
-                          </button>
-                        ))}
+                </div>
+                <div className="lg:sticky lg:top-8 lg:self-start">{yourStyle}</div>
+              </div>
+            ) : (
+              <div className="pop-in mt-10">
+                {introBlock}
+                {dataStrip}
+                <div className="relative left-1/2 mt-12 w-screen -translate-x-1/2 px-6">
+                  <div className="mx-auto max-w-6xl">
+                    {spotlightHeading}
+                    <div className="grid gap-6 md:grid-cols-3">{spotlightCards}</div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            ))}
 
           {/* Loading state — an explicit "working" panel so a slow first-time
               score reads as progress, not a frozen/crashed page. */}
@@ -518,18 +632,9 @@ export default function Home() {
             </div>
           )}
 
-          {/* Your style */}
-          {user && library !== null && (
-            <section className="mt-14">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-fog">
-                  Your style
-                </h2>
-                <SteamImport onImported={loadLibrary} initialSteamId={steamReturn} />
-              </div>
-              <StylePanel games={library} onRemove={removeFromLibrary} />
-            </section>
-          )}
+          {/* Your style — below a result (on the landing it lives in the split's
+              right column instead, so it isn't duplicated here) */}
+          {result && yourStyle && <div className="mt-14">{yourStyle}</div>}
 
           <footer className="mt-16 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-relaxed text-fog/60">
             <Link href="/about" className="transition hover:text-fog">How scoring works</Link>
