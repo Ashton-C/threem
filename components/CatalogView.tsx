@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import GameGrid, { type GridRow } from "./GameGrid";
 import { intensity, intensityBand } from "@/lib/intensity";
+import { archetype, ARCHETYPES } from "@/lib/archetype";
 
 export type CatalogRow = GridRow & { genre: string | null };
 
@@ -28,6 +29,7 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
   const [view, setView] = useState<"table" | "grid">("table");
   const [q, setQ] = useState("");
   const [genre, setGenre] = useState("");
+  const [arch, setArch] = useState("");
   const [min, setMin] = useState({ micro: 0, meso: 0, macro: 0 });
   const [minInt, setMinInt] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("featured_rank");
@@ -50,6 +52,7 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
       (r) =>
         (!ql || r.name.toLowerCase().includes(ql) || (r.genre ?? "").toLowerCase().includes(ql)) &&
         (!genre || r.genre === genre) &&
+        (!arch || archetype(r).name === arch) &&
         r.micro >= min.micro && r.meso >= min.meso && r.macro >= min.macro &&
         intensity(r) >= minInt
     );
@@ -60,7 +63,7 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
       return a.name.localeCompare(b.name);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, genre, min, minInt, sortKey, dir]);
+  }, [rows, q, genre, arch, min, minInt, sortKey, dir]);
 
   function sortBy(k: SortKey) {
     if (k === sortKey) setDir((d) => (d === 1 ? -1 : 1));
@@ -88,6 +91,17 @@ export default function CatalogView({ rows }: { rows: CatalogRow[] }) {
           <option value="">All genres</option>
           {genres.map((g) => (
             <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+        <select
+          value={arch}
+          onChange={(e) => setArch(e.target.value)}
+          className="rounded-lg border border-edge bg-panel px-3 py-1.5 text-sm text-paper outline-none focus:border-macro"
+          title="Filter by play-style archetype"
+        >
+          <option value="">All styles</option>
+          {ARCHETYPES.map((a) => (
+            <option key={a.name} value={a.name}>{a.name}</option>
           ))}
         </select>
         {(["micro", "meso", "macro"] as const).map((ax) => (

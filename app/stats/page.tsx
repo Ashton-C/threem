@@ -102,10 +102,11 @@ export default async function StatsPage() {
               <p className="font-display mb-2 text-sm font-bold" style={{ color: a.color }}>{a.label}</p>
               <div className="flex h-28 items-end gap-[3px]">
                 {d.map((count, score) => (
-                  <div key={score} className="flex flex-1 flex-col items-center justify-end" title={`${score}: ${count}`}>
+                  <div key={score} className="flex h-full flex-1 flex-col items-center justify-end gap-0.5" title={`score ${score}: ${count} game${count === 1 ? "" : "s"}`}>
+                    {count > 0 && <span className="text-[9px] leading-none tabular-nums text-fog/60">{count}</span>}
                     <div
                       className="w-full rounded-t"
-                      style={{ height: `${(count / max) * 100}%`, minHeight: count ? 2 : 0, background: a.color, opacity: 0.4 + 0.6 * (count / max) }}
+                      style={{ height: `${(count / max) * 88}%`, minHeight: count ? 3 : 0, background: a.color, opacity: 0.45 + 0.55 * (count / max) }}
                     />
                   </div>
                 ))}
